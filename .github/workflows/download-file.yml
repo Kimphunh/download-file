@@ -31,8 +31,10 @@ jobs:
       - name: Download file
         id: download_file
         run: |
-          file_extension="${{ github.event.inputs.file_url##*. }}"
-          wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name }}.${file_extension}"
+          file_url="${{ github.event.inputs.file_url }}"
+          file_name="${{ github.event.inputs.file_name }}"
+          file_extension="${file_url##*.}"
+          wget "${file_url}" -O "${file_name}.${file_extension}"
           echo "file_extension=${file_extension}" >> $GITHUB_ENV
         shell: bash
 
