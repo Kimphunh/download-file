@@ -1,4 +1,4 @@
-name: Download File and Setup Git LFS
+name: Download File and Release
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ on:
         default: ''
 
 jobs:
-  download_and_setup_lfs:
+  download_and_release:
     runs-on: ubuntu-latest
 
     steps:
@@ -30,13 +30,10 @@ jobs:
       - name: Setup Git LFS
         run: |
           git lfs install
-          git lfs track "*.file_extension"  # Thay đổi `*.file_extension` thành kiểu file bạn muốn track, ví dụ: `*.mp4`
+          git lfs track "${{ github.event.inputs.file_name }}"
           git add .gitattributes
           git commit -m "Setup Git LFS"
           git push
-
-      - name: Track file with Git LFS
-        run: git lfs track "${{ github.event.inputs.file_name }}"
 
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name }}"
@@ -45,8 +42,28 @@ jobs:
         env:
           ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
         run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
           git add "${{ github.event.inputs.file_name }}"
           git commit -m "Add downloaded file"
           git push https://x-access-token:${{ secrets.ACTIONS_PAT }}@github.com/${{ github.repository }}.git HEAD:main
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.0.0  # Thay đổi tag_name tùy theo yêu cầu của bạn
+          release_name: Release v1.0.0  # Thay đổi release_name tùy theo yêu cầu của bạn
+          draft: false
+          prerelease: false
+
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: $GITHUB_WORKSPACE/${{ github.event.inputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name }}
+          asset_content_type: application/octet-stream
