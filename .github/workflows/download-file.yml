@@ -35,15 +35,17 @@ jobs:
           git commit -m "Setup Git LFS"
           git push
 
-      - name: Determine file name and extension
+      - name: Determine file name, extension, and full name
         id: determine_file_info
         if: ${{ !github.event.inputs.file_name }}
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME=$(basename "${FILE_URL}")
           FILE_EXTENSION="${FILE_NAME##*.}"
+          FULL_FILE_NAME="${FILE_NAME}"
           echo "::set-output name=file_name::${FILE_NAME}"
           echo "::set-output name=file_extension::${FILE_EXTENSION}"
+          echo "::set-output name=full_file_name::${FULL_FILE_NAME}"
 
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}"
@@ -71,5 +73,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}
-          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_info.outputs.full_file_name }}
           asset_content_type: application/octet-stream
