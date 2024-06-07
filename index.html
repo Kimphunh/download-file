@@ -22,7 +22,14 @@
     <button id="open-file-button">Open Downloaded File</button>
   </div>
 
-  <script src="script.js"></script>
-</body>
-</html>
-<button id="run-workflow-button">Run Workflow</button>
+  <button id="run-download-file-button">Run Download File Workflow</button>
+
+<div id="form-container" style="display: none;">
+  <form id="download-file-form">
+    <label for="file-url">File URL:</label>
+    <input type="text" id="file-url" name="file-url" required><br><br>
+    <label for="file-name">Replace Name:</label>
+    <input type="text" id="file-name" name="file-name"><br><br>
+    <button type="submit">Run</button>
+  </form>
+    </div>
