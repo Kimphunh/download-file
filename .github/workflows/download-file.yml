@@ -33,10 +33,33 @@ jobs:
           git lfs track "${{ github.event.inputs.file_name }}"
           git add .gitattributes
           git commit -m "Setup Git LFS" || echo "No changes to commit"
-          git push origin HEAD
 
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name }}"
+
+      - name: Get the latest release version
+        id: get_latest_release
+        uses: octokit/request-action@v2.x
+        with:
+          route: GET /repos/${{ github.repository }}/releases/latest
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
+
+      - name: Determine new release version
+        id: determine_version
+        run: |
+          if [ -z "${{ steps.get_latest_release.outputs.data }}" ]; then
+            echo "new_version=1.0.0" >> $GITHUB_ENV
+          else
+            latest_version=$(echo "${{ steps.get_latest_release.outputs.data }}" | jq -r .tag_name)
+            major=$(echo $latest_version | cut -d'.' -f1)
+            minor=$(echo $latest_version | cut -d'.' -f2)
+            patch=$(echo $latest_version | cut -d'.' -f3)
+            new_patch=$((patch + 1))
+            new_version="${major}.${minor}.${new_patch}"
+            echo "new_version=$new_version" >> $GITHUB_ENV
+          fi
 
       - name: Create release
         id: create_release
@@ -44,8 +67,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v1.0.0  # Thay đổi tag_name tùy theo yêu cầu của bạn
-          release_name: Release v1.0.0  # Thay đổi release_name tùy theo yêu cầu của bạn
+          tag_name: ${{ env.new_version }}
+          release_name: Release ${{ env.new_version }}
           draft: false
           prerelease: false
 
