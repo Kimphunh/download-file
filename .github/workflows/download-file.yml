@@ -35,15 +35,18 @@ jobs:
           git commit -m "Setup Git LFS"
           git push
 
-      - name: Determine file name
-        id: determine_file_name
+      - name: Determine file name and extension
+        id: determine_file_info
         if: ${{ !github.event.inputs.file_name }}
         run: |
-          FILE_NAME=$(basename "${{ github.event.inputs.file_url }}")
-          echo "::set-output name=file_name::$FILE_NAME"
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME=$(basename "${FILE_URL}")
+          FILE_EXTENSION="${FILE_NAME##*.}"
+          echo "::set-output name=file_name::${FILE_NAME}"
+          echo "::set-output name=file_extension::${FILE_EXTENSION}"
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}"
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}"
 
       - name: Determine new release version
         id: determine_release_version
@@ -67,6 +70,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}
-          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}
           asset_content_type: application/octet-stream
