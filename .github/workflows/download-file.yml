@@ -28,13 +28,19 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git lfs install
 
-      - name: Download file
+      - name: Determine file extension and download
         id: download_file
         run: |
           file_url="${{ github.event.inputs.file_url }}"
           file_name="${{ github.event.inputs.file_name }}"
-          file_extension="${file_url##*.}"
-          wget "${file_url}" -O "${file_name}.${file_extension}"
+
+          # Get the file extension from the URL
+          wget --content-disposition --trust-server-names -O temp_file "${file_url}"
+          actual_file_name=$(basename "$(realpath temp_file)")
+          file_extension="${actual_file_name##*.}"
+          
+          # Rename the file to the desired file name with correct extension
+          mv temp_file "${file_name}.${file_extension}"
           echo "file_extension=${file_extension}" >> $GITHUB_ENV
         shell: bash
 
