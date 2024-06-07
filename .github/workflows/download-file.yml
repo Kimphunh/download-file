@@ -29,7 +29,9 @@ jobs:
           git lfs install
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${{ github.event.inputs.file_name##*. }}"
+        run: |
+          file_extension="${{ github.event.inputs.file_name##*. }}"
+          wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
 
       - name: Determine new release version
         id: determine_release_version
@@ -53,6 +55,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/downloaded_file.${{ github.event.inputs.file_name##*. }}
+          asset_path: ${{ github.workspace }}/downloaded_file.${file_extension}
           asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
