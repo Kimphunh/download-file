@@ -1,4 +1,4 @@
-name: Download File and Release
+name: Download File and Rename
 
 on:
   workflow_dispatch:
@@ -7,13 +7,13 @@ on:
         description: 'URL of the file to download'
         required: true
         default: ''
-      file_name:
-        description: 'Name to save the downloaded file as'
-        required: true
+      new_file_name:
+        description: 'New name for the downloaded file without extension (leave empty to use original name)'
+        required: false
         default: ''
 
 jobs:
-  download_and_release:
+  download_and_rename:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,10 +28,16 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git lfs install
 
-      - name: Download file
+      - name: Download and rename file
         run: |
-          file_extension="${{ github.event.inputs.file_name }}".split('.').pop()
-          wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
+          wget -q "${{ github.event.inputs.file_url }}" -O temp_file
+          if [ -z "${{ github.event.inputs.new_file_name }}" ]; then
+            file_name=$(basename "${{ github.event.inputs.file_url }}")
+          else
+            file_extension=$(basename temp_file | sed 's/.*\.//')
+            file_name="${{ github.event.inputs.new_file_name }}.${file_extension}"
+          fi
+          mv temp_file "$file_name"
 
       - name: Determine new release version
         id: determine_release_version
@@ -55,7 +61,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/downloaded_file.${file_extension}
-          asset_name: "downloaded_file.${file_extension}"
+          asset_path: ${{ github.workspace }}/$file_name
+          asset_name: "$file_name"
           asset_content_type: application/octet-stream
           
