@@ -28,33 +28,14 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git lfs install
 
-      - name: Download file and determine extension
-        id: download_file
+      - name: Download file
         run: |
-          file_url="${{ github.event.inputs.file_url }}"
-          file_name="${{ github.event.inputs.file_name }}"
-          
-          # Download the file
-          wget --content-disposition --trust-server-names -O temp_file "${file_url}"
-
-          # Determine the actual file name and extension
-          actual_file_name=$(basename "$(realpath temp_file)")
-          file_extension="${actual_file_name##*.}"
-
-          # If the file extension is the same as the file name, handle it as no extension
-          if [[ "${file_extension}" == "${actual_file_name}" ]]; then
-            echo "No extension found from the downloaded file, defaulting to 'tmp'"
-            file_extension="tmp"
-          fi
-
-          # Rename the file with the new name and correct extension
-          mv temp_file "${file_name}.${file_extension}"
-          echo "file_extension=${file_extension}" >> $GITHUB_ENV
-        shell: bash
+          file_extension=$(echo "${{ github.event.inputs.file_url }}" | awk -F . '{print $NF}')
+          wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
 
       - name: Determine new release version
         id: determine_release_version
-        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
+        run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
 
       - name: Create release
         id: create_release
@@ -62,8 +43,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.release_version }}
-          release_name: Release ${{ env.release_version }}
+          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
+          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
           draft: false
           prerelease: false
 
@@ -74,6 +55,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name }}.${{ env.file_extension }}
-          asset_name: ${{ github.event.inputs.file_name }}.${{ env.file_extension }}
+          asset_path: ${{ github.workspace }}/downloaded_file.${file_extension}
+          asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
