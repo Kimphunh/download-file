@@ -1,4 +1,4 @@
-name: Download File and Rename
+name: Download File and Release
 
 on:
   workflow_dispatch:
@@ -7,13 +7,13 @@ on:
         description: 'URL of the file to download'
         required: true
         default: ''
-      new_file_name:
-        description: 'New name for the downloaded file without extension (leave empty to use original name)'
-        required: false
+      file_name:
+        description: 'Name to save the downloaded file as'
+        required: true
         default: ''
 
 jobs:
-  download_and_rename:
+  download_and_release:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,22 +28,17 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git lfs install
 
-      - name: Download file and determine filename
+      - name: Extract file extension
+        id: extract_extension
         run: |
-          headers=$(curl -sI "${{ github.event.inputs.file_url }}")
-          content_disposition=$(echo "$headers" | grep -i ^Content-Disposition: | sed -e 's/.*filename=//')
-          if [ -z "$content_disposition" ]; then
-            echo "Cannot determine the file name from the server response."
-            exit 1
-          fi
-          file_name=$(basename "$content_disposition")
-          if [ -z "${{ github.event.inputs.new_file_name }}" ]; then
-            new_file_name=$file_name
-          else
-            file_extension="${file_name##*.}"
-            new_file_name="${{ github.event.inputs.new_file_name }}.$file_extension"
-          fi
-          wget -q "${{ github.event.inputs.file_url }}" -O "$new_file_name"
+          file_url="${{ github.event.inputs.file_url }}"
+          file_extension="${file_url##*.}"
+          echo "::set-output name=file_extension::$file_extension"
+
+      - name: Download file
+        run: |
+          file_extension="${{ steps.extract_extension.outputs.file_extension }}"
+          wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
 
       - name: Determine new release version
         id: determine_release_version
@@ -67,6 +62,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/$new_file_name
-          asset_name: "$new_file_name"
+          asset_path: ${{ github.workspace }}/downloaded_file.${{ steps.extract_extension.outputs.file_extension }}
+          asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
