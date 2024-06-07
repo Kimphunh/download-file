@@ -8,3 +8,4 @@ GenshinImapct filter=lfs diff=lfs merge=lfs -text
 Midnights_Album_LossLess filter=lfs diff=lfs merge=lfs -text
  filter=lfs diff=lfs merge=lfs -text
 Gu[[:space:]]gồ filter=lfs diff=lfs merge=lfs -text
+Chi_gu_go filter=lfs diff=lfs merge=lfs -text
