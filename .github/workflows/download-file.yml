@@ -30,7 +30,7 @@ jobs:
 
       - name: Download file
         run: |
-          file_extension=$(echo "${{ github.event.inputs.file_name }}" | awk -F . '{print $NF}')
+          file_extension="${{ github.event.inputs.file_name }}".split('.').pop()
           wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
 
       - name: Determine new release version
@@ -58,3 +58,4 @@ jobs:
           asset_path: ${{ github.workspace }}/downloaded_file.${file_extension}
           asset_name: "downloaded_file.${file_extension}"
           asset_content_type: application/octet-stream
+          
