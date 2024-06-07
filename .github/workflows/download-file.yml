@@ -21,12 +21,12 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Download file
-        run: wget ${{ github.event.inputs.file_url }} -O ${{ github.event.inputs.file_name }}
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name }}"
 
       - name: Commit file
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-          git add ${{ github.event.inputs.file_name }}
+          git add "${{ github.event.inputs.file_name }}"
           git commit -m "Add downloaded file"
           git push
