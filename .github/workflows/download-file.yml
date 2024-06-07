@@ -56,5 +56,5 @@ jobs:
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ${{ github.workspace }}/downloaded_file.${file_extension}
-          asset_name: ${{ github.event.inputs.file_name }}
+          asset_name: "downloaded_file.${file_extension}"
           asset_content_type: application/octet-stream
