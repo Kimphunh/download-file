@@ -66,6 +66,4 @@ jobs:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: $GITHUB_WORKSPACE/${{ github.event.inputs.file_name }}
           asset_name: ${{ github.event.inputs.file_name }}
-          asset_content_type: application/octet-stream          asset_path: $GITHUB_WORKSPACE/${{ github.event.inputs.file_name }}
-          asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
