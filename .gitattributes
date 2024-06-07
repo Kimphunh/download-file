@@ -1,3 +1,0 @@
-*.file_extension filter=lfs diff=lfs merge=lfs -text
-Midnights_Album_LossLess filter=lfs diff=lfs merge=lfs -text
-Ydidndjd filter=lfs diff=lfs merge=lfs -text
