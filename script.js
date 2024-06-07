@@ -49,3 +49,37 @@ document.addEventListener('DOMContentLoaded', function() {
     console.log('Opening downloaded file...');
   });
 });
+document.addEventListener('DOMContentLoaded', function() {
+  const runWorkflowButton = document.getElementById('run-workflow-button');
+
+  runWorkflowButton.addEventListener('click', function() {
+    const url = 'https://api.github.com/repos/Kimphunh/download-file/actions/workflows/download-file.yml/dispatches';
+    const token = 'YOUR_GITHUB_TOKEN'; // Đảm bảo là một GitHub Personal Access Token có quyền truy cập repo
+
+    const formData = {
+      ref: 'main', // Hoặc thay bằng tên nhánh mà bạn muốn chạy workflow
+      inputs: {
+        file_url: 'YOUR_FILE_URL',
+        file_name: 'YOUR_FILE_NAME'
+      }
+    };
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `token ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(formData)
+    })
+    .then(response => {
+      if (!response.ok) {
+        throw new Error('Failed to trigger workflow');
+      }
+      console.log('Workflow triggered successfully');
+    })
+    .catch(error => {
+      console.error('Error triggering workflow:', error);
+    });
+  });
+});
