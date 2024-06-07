@@ -8,8 +8,8 @@ on:
         required: true
         default: ''
       file_name:
-        description: 'Name to save the downloaded file as'
-        required: true
+        description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
+        required: false
         default: ''
 
 jobs:
@@ -20,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
         with:
-          lfs: true
+          lfs: true  # Thiết lập để sử dụng Git LFS
 
       - name: Set up Git
         run: |
@@ -35,12 +35,15 @@ jobs:
           git commit -m "Setup Git LFS"
           git push
 
-      - name: Download file
+      - name: Determine file name
+        id: determine_file_name
+        if: ${{ !github.event.inputs.file_name }}
         run: |
-          file_url="${{ github.event.inputs.file_url }}"
-          file_name=$(curl -sI "$file_url" | grep -i "^Content-Disposition" | sed -r 's/^.*filename=([^;]+).*$/\1/' | tr -d '"')
-          curl -L -o "$file_name" -O -J "$file_url"
-          mv "$file_name" "${{ github.event.inputs.file_name }}"
+          FILE_NAME=$(basename "${{ github.event.inputs.file_url }}")
+          echo "::set-output name=file_name::$FILE_NAME"
+
+      - name: Download file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}"
 
       - name: Determine new release version
         id: determine_release_version
@@ -64,6 +67,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name }}
-          asset_name: ${{ github.event.inputs.file_name }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}
           asset_content_type: application/octet-stream
