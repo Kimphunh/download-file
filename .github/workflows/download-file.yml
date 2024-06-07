@@ -1,4 +1,4 @@
-name: Download File
+name: Download File and Setup Git LFS
 
 on:
   workflow_dispatch:
@@ -13,17 +13,32 @@ on:
         default: ''
 
 jobs:
-  download:
+  download_and_setup_lfs:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git lfs track "*.file_extension"  # Thay đổi `*.file_extension` thành kiểu file bạn muốn track, ví dụ: `*.mp4`
+          git add .gitattributes
+          git commit -m "Setup Git LFS"
+          git push
+
+      - name: Track file with Git LFS
+        run: git lfs track "${{ github.event.inputs.file_name }}"
 
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name }}"
 
       - name: Commit file
+        env:
+          ACTIONS_PAT: ${{ secrets.ACTIONS_PAT }}
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
