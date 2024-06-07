@@ -55,6 +55,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/downloaded_file.${{ file_extension }}
+          asset_path: ${{ github.workspace }}/downloaded_file.${{ steps.determine_release_version.outputs.release_version }}
           asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
