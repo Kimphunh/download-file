@@ -5,3 +5,4 @@ U filter=lfs diff=lfs merge=lfs -text
  filter=lfs diff=lfs merge=lfs -text
 GenshinImapct filter=lfs diff=lfs merge=lfs -text
  filter=lfs diff=lfs merge=lfs -text
+Midnights_Album_LossLess filter=lfs diff=lfs merge=lfs -text
