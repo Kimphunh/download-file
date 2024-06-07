@@ -59,11 +59,13 @@ jobs:
 
       - name: Upload release asset
         id: upload-release-asset
-        uses: actions/upload-release-asset@v2
+        uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: $GITHUB_WORKSPACE/${{ github.event.inputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name }}
+          asset_content_type: application/octet-stream          asset_path: $GITHUB_WORKSPACE/${{ github.event.inputs.file_name }}
           asset_name: ${{ github.event.inputs.file_name }}
           asset_content_type: application/octet-stream
