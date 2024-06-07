@@ -28,16 +28,22 @@ jobs:
           git config --global user.email 'github-actions@github.com'
           git lfs install
 
-      - name: Download and rename file
+      - name: Download file and determine filename
         run: |
-          wget -q "${{ github.event.inputs.file_url }}" -O temp_file
-          if [ -z "${{ github.event.inputs.new_file_name }}" ]; then
-            file_name=$(basename "${{ github.event.inputs.file_url }}")
-          else
-            file_extension=$(basename temp_file | sed 's/.*\.//')
-            file_name="${{ github.event.inputs.new_file_name }}.${file_extension}"
+          headers=$(curl -sI "${{ github.event.inputs.file_url }}")
+          content_disposition=$(echo "$headers" | grep -i ^Content-Disposition: | sed -e 's/.*filename=//')
+          if [ -z "$content_disposition" ]; then
+            echo "Cannot determine the file name from the server response."
+            exit 1
           fi
-          mv temp_file "$file_name"
+          file_name=$(basename "$content_disposition")
+          if [ -z "${{ github.event.inputs.new_file_name }}" ]; then
+            new_file_name=$file_name
+          else
+            file_extension="${file_name##*.}"
+            new_file_name="${{ github.event.inputs.new_file_name }}.$file_extension"
+          fi
+          wget -q "${{ github.event.inputs.file_url }}" -O "$new_file_name"
 
       - name: Determine new release version
         id: determine_release_version
@@ -61,7 +67,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/$file_name
-          asset_name: "$file_name"
+          asset_path: ${{ github.workspace }}/$new_file_name
+          asset_name: "$new_file_name"
           asset_content_type: application/octet-stream
-          
