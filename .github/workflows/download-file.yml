@@ -1,0 +1,32 @@
+name: Download File
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'URL of the file to download'
+        required: true
+        default: ''
+      file_name:
+        description: 'Name to save the downloaded file as'
+        required: true
+        default: ''
+
+jobs:
+  download:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Download file
+        run: wget ${{ github.event.inputs.file_url }} -O ${{ github.event.inputs.file_name }}
+
+      - name: Commit file
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+          git add ${{ github.event.inputs.file_name }}
+          git commit -m "Add downloaded file"
+          git push
