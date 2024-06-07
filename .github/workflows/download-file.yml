@@ -30,7 +30,7 @@ jobs:
 
       - name: Download file
         run: |
-          file_extension="${{ github.event.inputs.file_name##*. }}"
+          file_extension=$(echo "${{ github.event.inputs.file_name }}" | awk -F . '{print $NF}')
           wget "${{ github.event.inputs.file_url }}" -O "downloaded_file.${file_extension}"
 
       - name: Determine new release version
