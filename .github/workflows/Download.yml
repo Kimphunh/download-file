@@ -26,7 +26,6 @@ jobs:
           git config --global user.email 'github-actions@github.com'
 
       - name: Identify file name and extension
-        id: file_info
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           # Cố gắng lấy tên file từ Content-Disposition header
