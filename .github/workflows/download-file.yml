@@ -26,7 +26,7 @@ jobs:
           git config --global user.email 'github-actions@github.com'
 
       - name: Determine file name
-        id: determine_file_name
+        id: file_name
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME=$(basename "${FILE_URL}")
@@ -34,38 +34,47 @@ jobs:
             FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
             if [[ -z "$FILE_NAME" ]]; then
               FILE_NAME="file.temp"
+              echo "Lỗi: Không thể lấy tên tệp từ URL hoặc server."
             fi
           fi
-          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
+          echo "::set-output name=file_name::$FILE_NAME"
+
+      - name: Determine file extension
+        id: file_extension
+        run: |
+          FILE_EXTENSION="${{ steps.file_name.outputs.file_name##*. }}"
+          if [[ "$FILE_EXTENSION" == "$FILE_NAME" ]]; then
+            FILE_EXTENSION="temp"
+          fi
+          echo "::set-output name=file_extension::$FILE_EXTENSION"
 
       - name: Download file
-        run: |
-          wget "${{ github.event.inputs.file_url }}" -O "${{ env.file_name }}"
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.file_name.outputs.file_name }}"
 
       - name: Finalize file name
-        if: ${{ github.event.inputs.file_name != '' }}
+        if: ${{ github.event.inputs.file_name }}
         run: |
-          FILE_EXTENSION=$(echo "${{ env.file_name }}" | awk -F . '{print $NF}')
-          FINAL_NAME="${{ github.event.inputs.file_name }}.$FILE_EXTENSION"
-          mv "${{ env.file_name }}" "$FINAL_NAME"
-          echo "final_name=$FINAL_NAME" >> $GITHUB_ENV
+          mv "${{ steps.file_name.outputs.file_name }}" "${{ github.event.inputs.file_name }}.${{ steps.file_extension.outputs.file_extension }}"
 
       - name: Determine new release version
         id: determine_release_version
-        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
+        run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
 
       - name: Create release notes
         id: create_release_notes
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME="${{ env.final_name || env.file_name }}"
+          FILE_NAME="${{ github.event.inputs.file_name || steps.file_name.outputs.file_name }}"
+          FILE_EXTENSION="${{ steps.file_extension.outputs.file_extension }}"
           ERROR_MSG=""
           
-          if [[ $FILE_NAME == "file.temp" ]]; then
-            ERROR_MSG="Lỗi: Không thể lấy tên tệp từ server."
+          if [[ $FILE_NAME == "temp_name" && $FILE_EXTENSION == "temp" ]]; then
+            ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
           fi
           
-          echo "release_notes=File URL: ${FILE_URL}<br>${ERROR_MSG}" >> $GITHUB_ENV
+          # ... (phần tạo preview không thay đổi)
+          
+          echo "::set-output name=release_notes::File URL: ${FILE_URL}<br>${PREVIEW}<br>${ERROR_MSG}"
 
       - name: Create release
         id: create_release
@@ -73,9 +82,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ env.release_version }}
-          release_name: Release ${{ env.release_version }}
-          body: ${{ env.release_notes }}
+          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
+          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
+          body: ${{ steps.create_release_notes.outputs.release_notes }}
           draft: false
           prerelease: false
 
@@ -86,8 +95,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.final_name || env.file_name }}
-          asset_name: ${{ env.final_name || env.file_name }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.file_name.outputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name || steps.file_name.outputs.file_name }}
           asset_content_type: application/octet-stream
 
       - name: Cleanup
@@ -96,3 +105,4 @@ jobs:
           git rm .gitattributes
           git commit -m "Remove .gitattributes" || echo "No changes to commit"
           git push
+          
