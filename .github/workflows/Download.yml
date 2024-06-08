@@ -67,11 +67,11 @@ jobs:
         prerelease: false
 
         - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
-        asset_name: ${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
-        asset_content_type: application/octet-stream
+         uses: actions/upload-release-asset@v1
+         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+         with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
+          asset_name: ${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
+          asset_content_type: application/octet-stream
