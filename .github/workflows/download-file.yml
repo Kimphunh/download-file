@@ -28,7 +28,6 @@ jobs:
       - name: Setup Git LFS
         run: |
           git lfs install
-          git lfs track "*"
           git add .gitattributes
           git commit -m "Setup Git LFS"
           git push
