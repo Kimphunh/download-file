@@ -26,7 +26,6 @@ jobs:
           git config --global user.email 'github-actions@github.com'
 
       - name: Identify file name
-        id: identify_file_name
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME="${{ github.event.inputs.file_name }}"
@@ -43,7 +42,7 @@ jobs:
             fi
           fi
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
-          echo "::set-output name=file_name::$FILE_NAME"
+          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME }}"
@@ -59,19 +58,18 @@ jobs:
           else
             mv "${{ env.FILE_NAME }}" "${FILE_NAME}.${FILE_EXTENSION}"
           fi
+          echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Determine new release version
-        id: determine_release_version
-        run: echo "::set-output name=release_version::v1.1.$(( ${{ github.run_number }} + 1 ))"
+        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
 
       - name: Create release
-        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
-          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
+          tag_name: ${{ env.release_version }}
+          release_name: Release ${{ env.release_version }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
             ${{ env.NOTIFY_MESSAGE }}
@@ -79,7 +77,6 @@ jobs:
           prerelease: false
 
       - name: Upload release asset
-        id: upload-release-asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
