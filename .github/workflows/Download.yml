@@ -42,8 +42,10 @@ jobs:
         if: ${{ github.event.inputs.file_name }}
         run: |
           NEW_FILE_NAME="${{ github.event.inputs.file_name }}"
-          if [[ $NEW_FILE_NAME != *.* ]]; then
-            NEW_FILE_NAME="${NEW_FILE_NAME}.${{ steps.identify_file_name.outputs.file_name | split(".", 2)[1] }}"
+          EXTENSION="${NEW_FILE_NAME##*.}"
+          if [[ ! $EXTENSION ]]; then
+            EXTENSION="${steps.identify_file_name.outputs.file_name##*.}"
+            NEW_FILE_NAME="${NEW_FILE_NAME}.${EXTENSION}"
           fi
           mv "${{ steps.identify_file_name.outputs.file_name }}" "$NEW_FILE_NAME"
 
