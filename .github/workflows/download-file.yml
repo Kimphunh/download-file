@@ -56,9 +56,10 @@ jobs:
       - name: Finalize file name
         if: ${{ github.event.inputs.new_file_name }}
         run: |
-         NEW_FILE_NAME="${{ github.event.inputs.new_file_name }}"
-         EXTENSION="${{ steps.determine_file_name.outputs.file_name | splitext | last }}"
-         mv "${{ steps.determine_file_name.outputs.file_name }}" "${NEW_FILE_NAME}.${EXTENSION}"
+          NEW_FILE_NAME="${{ github.event.inputs.new_file_name }}"
+          FILE_EXTENSION="${{ steps.determine_file_name.outputs.file_name##*. }}"
+          mv "${{ steps.determine_file_name.outputs.file_name }}" "${NEW_FILE_NAME}.${FILE_EXTENSION}"
+
       - name: Determine new release version
         id: determine_release_version
         run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
@@ -68,7 +69,7 @@ jobs:
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME="${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}"
-          FILE_EXTENSION="${{ steps.determine_file_name.outputs.file_name | splitext | last }}"
+          FILE_EXTENSION="${{ steps.determine_file_name.outputs.file_name##*. }}"
           
           if [[ $FILE_EXTENSION == "jpg" || $FILE_EXTENSION == "jpeg" || $FILE_EXTENSION == "png" || $FILE_EXTENSION == "gif" ]]; then
             PREVIEW="<img src='${FILE_NAME}.${FILE_EXTENSION}' alt='${FILE_NAME}' width='600' />"
@@ -99,8 +100,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name | splitext | last }}
-          asset_name: ${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name | splitext | last }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name##*. }}
+          asset_name: ${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name##*. }}
           asset_content_type: application/octet-stream
 
       - name: Cleanup
