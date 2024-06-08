@@ -7,58 +7,56 @@ on:
         description: 'URL of the file to download'
         required: true
         default: ''
-      replace_file_name:
-        description: 'Replacement file name (leave blank to use original filename from URL)'
+      file_name_replace:
+        description: 'Replacement name for the downloaded file (leave blank to use original filename from URL)'
         required: false
         default: ''
 
 jobs:
-  download_and_release:
+  identify_file_name:
     runs-on: ubuntu-latest
+    outputs:
+      file_name: ${{ steps.determine_file_info.outputs.file_name }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-        with:
-          lfs: true  # Thiết lập để sử dụng Git LFS
-
-      - name: Set up Git
-        run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          git lfs track "${{ github.event.inputs.file_name }}"
-          git add .gitattributes
-          git commit -m "Setup Git LFS"
-          git push
-
       - name: Determine file name
-        id: determine_file_name
+        id: determine_file_info
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME=$(basename "${FILE_URL}" | cut -c 1-50)
-          if [ ${#FILE_NAME} -eq 0 ]; then
-            echo "Could not determine file name, using temporary name 'temp.file'"
+          FILE_NAME=$(basename "${FILE_URL}")
+          FILE_EXTENSION="${FILE_NAME##*.}"
+          if [ -z "${FILE_NAME}" ]; then
             FILE_NAME="temp.file"
+            echo "::warning::Unable to identify file name"
           fi
           echo "::set-output name=file_name::${FILE_NAME}"
 
-      - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
+  download_file:
+    needs: identify_file_name
+    runs-on: ubuntu-latest
 
-      - name: Determine new file name and extension
+    steps:
+      - name: Download file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ needs.identify_file_name.outputs.file_name }}"
+
+  edit_final:
+    needs: download_file
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Determine new file name
         id: determine_new_file_name
-        if: ${{ github.event.inputs.replace_file_name != '' }}
         run: |
-          NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}"
-          EXTENSION=$(echo "${{ steps.determine_file_name.outputs.file_name }}" | cut -d '.' -f 2-)
-          if [ ${{ github.event.inputs.replace_file_name }} != ${{ github.event.inputs.replace_file_name | cut -d '.' -f 1 }} ]; then
-            NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}"
+          REPLACE_NAME="${{ github.event.inputs.file_name_replace }}"
+          if [ -n "${REPLACE_NAME}" ]; then
+            NEW_FILE_NAME="${REPLACE_NAME}"
+            FILE_EXTENSION="${REPLACE_NAME##*.}"
+            if [ -z "${FILE_EXTENSION}" ]; then
+              FILE_EXTENSION="${{ needs.identify_file_name.outputs.file_name }}"
+              NEW_FILE_NAME="${NEW_FILE_NAME}.${FILE_EXTENSION}"
+            fi
           else
-            NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}.${{ EXTENSION }}"
+            NEW_FILE_NAME="${{ needs.identify_file_name.outputs.file_name }}"
           fi
           echo "::set-output name=new_file_name::${NEW_FILE_NAME}"
 
@@ -72,6 +70,16 @@ jobs:
           release_name: Release v1.0.${{ github.run_number }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
-            New file name: ${{ steps.determine_new_file_name.outputs.new_file_name }}
           draft: false
           prerelease: false
+
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ needs.identify_file_name.outputs.file_name }}
+          asset_name: ${{ needs.edit_final.outputs.new_file_name }}
+          asset_content_type: application/octet-stream
