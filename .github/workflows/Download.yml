@@ -24,21 +24,32 @@ jobs:
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
+          
+      - name: Check if .gitattributes exists
+        run: |
+          if [ -f ".gitattributes" ]; then
+            echo "Git attributes file exists"
+          else
+            echo "Git attributes file does not exist"
+          fi
+
       - name: Determine file name
         id: determine_file_name
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME=$(basename "${FILE_URL}")
-          if [[ ${#FILE_NAME} -gt 50 || ! "${FILE_NAME}" =~ .*\..* ]]; then
+          if [[ ${#FILE_NAME} -gt 50 || ! "${FILE_NAME}" =~ \..* ]]; then
             FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
             if [[ -z "$FILE_NAME" ]]; then
               FILE_NAME="file.temp"
             fi
           fi
           echo "file_name=$FILE_NAME" >> $GITHUB_ENV
+
       - name: Download file
         run: |
           wget "${{ github.event.inputs.file_url }}" -O "${{ env.file_name }}"
+
       - name: Finalize file name
         if: ${{ github.event.inputs.file_name != '' }}
         run: |
@@ -46,6 +57,7 @@ jobs:
           FINAL_NAME="${{ github.event.inputs.file_name }}.$FILE_EXTENSION"
           mv "${{ env.file_name }}" "$FINAL_NAME"
           echo "final_name=$FINAL_NAME" >> $GITHUB_ENV
+
       - name: Determine new release version
         id: determine_release_version
         run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
@@ -62,6 +74,7 @@ jobs:
           fi
           
           echo "release_notes=File URL: ${FILE_URL}<br>${ERROR_MSG}" >> $GITHUB_ENV
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
