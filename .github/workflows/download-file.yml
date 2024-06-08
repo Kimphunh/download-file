@@ -20,7 +20,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v2
         with:
-          lfs: true  # Thiết lập để sử dụng Git LFS
+          lfs: true
 
       - name: Set up Git
         run: |
@@ -56,6 +56,23 @@ jobs:
         id: determine_release_version
         run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
 
+      - name: Create release notes
+        id: create_release_notes
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}"
+          FILE_EXTENSION="${{ steps.determine_file_extension.outputs.file_extension }}"
+          
+          if [[ $FILE_EXTENSION == "jpg" || $FILE_EXTENSION == "jpeg" || $FILE_EXTENSION == "png" || $FILE_EXTENSION == "gif" ]]; then
+            PREVIEW="<img src='${FILE_NAME}.${FILE_EXTENSION}' alt='${FILE_NAME}' width='600' />"
+          elif [[ $FILE_EXTENSION == "mp4" || $FILE_EXTENSION == "webm" || $FILE_EXTENSION == "ogg" ]]; then
+            PREVIEW="<video width='600' controls><source src='${FILE_NAME}.${FILE_EXTENSION}' type='video/${FILE_EXTENSION}'></video>"
+          else
+            PREVIEW="No preview available for this file type."
+          fi
+          
+          echo "::set-output name=release_notes::File URL: ${FILE_URL}<br>${PREVIEW}"
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
@@ -64,6 +81,7 @@ jobs:
         with:
           tag_name: ${{ steps.determine_release_version.outputs.release_version }}
           release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
+          body: ${{ steps.create_release_notes.outputs.release_notes }}
           draft: false
           prerelease: false
 
