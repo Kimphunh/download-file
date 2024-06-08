@@ -25,7 +25,8 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
 
-      - name: Identify file name
+      - name: Identify file name and extension
+        id: file_info
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME="${{ github.event.inputs.file_name }}"
@@ -35,30 +36,29 @@ jobs:
             if [ -z "$FILE_NAME" ]; then
               # Lấy tên file từ URL nếu không có header
               FILE_NAME=$(basename "$FILE_URL")
-              if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
-                FILE_NAME="temp.file"
-                echo "Không lấy được tên file từ URL hoặc header." >> $GITHUB_ENV
-              fi
             fi
           fi
-          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
-          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
+          # Xác định phần mở rộng của file
+          MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*')
+          EXTENSION="${MIME_TYPE##*/}"
+          echo "FILE_NAME_WITH_EXT=${FILE_NAME}.${EXTENSION}" >> $GITHUB_ENV
+          echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME }}"
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME_WITH_EXT }}"
 
-      - name: Final file rename
+      - name: Rename file if necessary
         if: ${{ github.event.inputs.file_name }}
         run: |
           FILE_NAME="${{ github.event.inputs.file_name }}"
-          FILE_EXTENSION="${{ steps.identify_file_name.outputs.file_extension }}"
+          FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
           # Kiểm tra xem tên thay thế có phần mở rộng hay không
           if [[ "$FILE_NAME" == *.* ]]; then
-            mv "${{ env.FILE_NAME }}" "$FILE_NAME"
+            mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
           else
-            mv "${{ env.FILE_NAME }}" "${FILE_NAME}.${FILE_EXTENSION}"
+            mv "${{ env.FILE_NAME_WITH_EXT }}" "${FILE_NAME}.${FILE_EXTENSION}"
           fi
-          echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+          echo "FINAL_FILE_NAME=${FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
 
       - name: Determine new release version
         run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
@@ -73,17 +73,34 @@ jobs:
           release_name: Release ${{ env.release_version }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
-            ${{ env.NOTIFY_MESSAGE }}
+            !File Preview
           draft: false
           prerelease: false
 
       - name: Upload release asset
+        id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.FILE_NAME }}
-          asset_name: ${{ env.FILE_NAME }}
+          asset_path: ${{ github.workspace }}/${{ env.FINAL_FILE_NAME }}
+          asset_name: ${{ env.FINAL_FILE_NAME }}
           asset_content_type: application/octet-stream
+
+      - name: Update release notes with preview
+        run: |
+          ASSET_URL=$(jq --raw-output '.browser_download_url' <<< "${{ steps.upload_release_asset.outputs }}")
+          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
+          PREVIEW_TEXT=""
+          if [[ "${{ env.FILE_EXTENSION }}" =~ ^(jpg|png|gif)$ ]]; then
+            PREVIEW_TEXT="!Image Preview"
+          elif [[ "${{ env.FILE_EXTENSION }}" =~ ^(mp3|wav)$ ]]; then
+            PREVIEW_TEXT="Listen to Audio"
+          elif [[ "${{ env.FILE_EXTENSION }}" =~ ^(mp4|avi)$ ]]; then
+            PREVIEW_TEXT="Watch Video"
+          fi
+          gh release edit "${{ env.release_version }}" --notes "${PREVIEW_TEXT}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           
