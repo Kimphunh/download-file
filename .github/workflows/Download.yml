@@ -7,62 +7,56 @@ on:
         description: 'URL of the file to download'
         required: true
         default: ''
-      file_name_replace:
-        description: 'Replacement name for the downloaded file (leave blank to use original filename from URL)'
+      file_name:
+        description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
         required: false
         default: ''
 
 jobs:
-  identify_file_name:
+  identify_and_download:
     runs-on: ubuntu-latest
-    outputs:
-      file_name: ${{ steps.determine_file_info.outputs.file_name }}
 
     steps:
-      - name: Determine file name
-        id: determine_file_info
+      - name: Identify file name
+        id: identify_file_name
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME=$(basename "${FILE_URL}")
-          FILE_EXTENSION="${FILE_NAME##*.}"
-          if [ -z "${FILE_NAME}" ]; then
-            FILE_NAME="temp.file"
-            echo "::warning::Unable to identify file name"
-          fi
-          echo "::set-output name=file_name::${FILE_NAME}"
-
-  download_file:
-    needs: identify_file_name
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ needs.identify_file_name.outputs.file_name }}"
-
-  edit_final:
-    needs: download_file
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Determine new file name
-        id: determine_new_file_name
-        run: |
-          REPLACE_NAME="${{ github.event.inputs.file_name_replace }}"
-          if [ -n "${REPLACE_NAME}" ]; then
-            NEW_FILE_NAME="${REPLACE_NAME}"
-            FILE_EXTENSION="${REPLACE_NAME##*.}"
-            if [ -z "${FILE_EXTENSION}" ]; then
-              FILE_EXTENSION="${{ needs.identify_file_name.outputs.file_name }}"
-              NEW_FILE_NAME="${NEW_FILE_NAME}.${FILE_EXTENSION}"
-            fi
+          FILE_NAME=""
+          if [[ $FILE_URL =~ .*\?.*filename=([^&]+) ]]; then
+            FILE_NAME="${BASH_REMATCH[1]}"
+          elif [[ $FILE_URL =~ /([^/]+)\.(?!.*\.) ]]; then
+            FILE_NAME="${BASH_REMATCH[1]}"
+          elif [[ ${#FILE_URL} -gt 50 ]]; then
+            echo "::warning::Unable to identify file name from URL"
           else
-            NEW_FILE_NAME="${{ needs.identify_file_name.outputs.file_name }}"
+            FILE_NAME="temp.file"
+            echo "::warning::Unable to identify file name from URL"
           fi
-          echo "::set-output name=new_file_name::${NEW_FILE_NAME}"
+          echo "::set-output name=file_name::$FILE_NAME"
 
-      - name: Determine new release version
+      - name: Download file
+        id: download_file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.identify_file_name.outputs.file_name }}"
+
+      - name: Last-minute adjustments
+        if: ${{ github.event.inputs.file_name }}
+        run: |
+          NEW_FILE_NAME="${{ github.event.inputs.file_name }}"
+          if [[ $NEW_FILE_NAME != *.* ]]; then
+            NEW_FILE_NAME="${NEW_FILE_NAME}.${{ steps.identify_file_name.outputs.file_name | split(".", 2)[1] }}"
+          fi
+          mv "${{ steps.identify_file_name.outputs.file_name }}" "$NEW_FILE_NAME"
+
+      - name: Determine release version
         id: determine_release_version
-        run: echo "::set-output name=release_version::v1.1.${{ github.run_number }}"
+        run: |
+          PREVIOUS_RELEASE=$(git describe --tags --abbrev=0)
+          MAJOR=$(echo $PREVIOUS_RELEASE | cut -d'.' -f1)
+          MINOR=$(echo $PREVIOUS_RELEASE | cut -d'.' -f2)
+          PATCH=$(echo $PREVIOUS_RELEASE | cut -d'.' -f3)
+          PATCH=$((PATCH + 1))
+          NEW_RELEASE="$MAJOR.$MINOR.$PATCH"
+          echo "::set-output name=release_version::$NEW_RELEASE"
 
       - name: Create release
         id: create_release
@@ -74,6 +68,7 @@ jobs:
           release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
+            File Name: ${{ steps.identify_file_name.outputs.file_name }}
           draft: false
           prerelease: false
 
@@ -84,6 +79,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ needs.identify_file_name.outputs.file_name }}
-          asset_name: ${{ needs.edit_final.outputs.new_file_name }}
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.identify_file_name.outputs.file_name }}
+          asset_name: ${{ github.event.inputs.file_name || steps.identify_file_name.outputs.file_name }}
           asset_content_type: application/octet-stream
