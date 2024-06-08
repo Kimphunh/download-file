@@ -6,9 +6,11 @@ on:
       file_url:
         description: 'URL of the file to download'
         required: true
+        default: ''
       file_name:
         description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
         required: false
+        default: ''
 
 jobs:
   download_and_release:
@@ -41,51 +43,43 @@ jobs:
             FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
             if [[ -z "$FILE_NAME" ]]; then
               FILE_NAME="file.temp"
+              echo "ERROR_MSG=Lỗi: Không thể lấy tên tệp từ server." >> $GITHUB_ENV
             fi
           fi
-          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
-          echo "::set-output name=file_name::$FILE_NAME"
+          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Determine file extension
         id: determine_file_extension
         run: |
-          FILE_NAME="${{ steps.determine_file_name.outputs.file_name }}"
+          FILE_NAME="${{ env.FILE_NAME }}"
           FILE_EXTENSION="${FILE_NAME##*.}"
-          if [[ -z "$FILE_EXTENSION" || "$FILE_EXTENSION" == "$FILE_NAME" ]]; then
+          if [[ "$FILE_EXTENSION" == "$FILE_NAME" ]]; then
             FILE_EXTENSION="temp"
           fi
-          echo "file_extension=$FILE_EXTENSION" >> $GITHUB_ENV
-          echo "::set-output name=file_extension::$FILE_EXTENSION"
+          echo "FILE_EXTENSION=$FILE_EXTENSION" >> $GITHUB_ENV
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.file_name }}"
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME }}"
 
       - name: Finalize file name
         if: ${{ github.event.inputs.file_name != '' }}
         run: |
-          FILE_EXTENSION="${{ env.file_extension }}"
-          FINAL_NAME="${{ github.event.inputs.file_name }}.${FILE_EXTENSION}"
-          mv "${{ env.file_name }}" "$FINAL_NAME"
-          echo "final_name=$FINAL_NAME" >> $GITHUB_ENV
-          echo "::set-output name=final_name::$FINAL_NAME"
+          FINAL_NAME="${{ github.event.inputs.file_name }}.${{ env.FILE_EXTENSION }}"
+          mv "${{ env.FILE_NAME }}" "$FINAL_NAME"
+          echo "FINAL_NAME=$FINAL_NAME" >> $GITHUB_ENV
 
       - name: Determine new release version
         id: determine_release_version
-        run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
+        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
 
       - name: Create release notes
         id: create_release_notes
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME="${{ env.final_name || env.file_name }}"
-          ERROR_MSG=""
-          
-          if [[ $FILE_NAME == "file.temp" ]]; then
-            ERROR_MSG="Lỗi: Không thể lấy tên tệp từ server."
-          fi
+          FILE_NAME="${{ env.FINAL_NAME || env.FILE_NAME }}"
+          ERROR_MSG="${{ env.ERROR_MSG || '' }}"
           
           echo "release_notes=File URL: ${FILE_URL}<br>${ERROR_MSG}" >> $GITHUB_ENV
-          echo "::set-output name=release_notes::$FILE_URL<br>${ERROR_MSG}"
 
       - name: Create release
         id: create_release
@@ -93,9 +87,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
-          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
-          body: ${{ steps.create_release_notes.outputs.release_notes }}
+          tag_name: ${{ env.release_version }}
+          release_name: Release ${{ env.release_version }}
+          body: ${{ env.release_notes }}
           draft: false
           prerelease: false
 
@@ -106,8 +100,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.final_name || env.file_name }}
-          asset_name: ${{ env.final_name || env.file_name }}
+          asset_path: ${{ github.workspace }}/${{ env.FINAL_NAME || env.FILE_NAME }}
+          asset_name: ${{ env.FINAL_NAME || env.FILE_NAME }}
           asset_content_type: application/octet-stream
 
       - name: Cleanup
