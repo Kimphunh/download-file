@@ -50,7 +50,14 @@ jobs:
           echo "::set-output name=file_name::${FILE_NAME}"
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}"
+        run: |
+          # Extract server name from URL
+          SERVER_NAME=$(echo "${{ github.event.inputs.file_url }}" | cut -d '/' -f 3)
+
+          # Construct filename using server name and extension
+          FILE_NAME="${SERVER_NAME}.${{ steps.determine_file_extension.outputs.file_extension }}"
+
+          wget "${{ github.event.inputs.file_url }}" -O "$FILE_NAME"
 
       - name: Determine new release version
         id: determine_release_version
@@ -88,17 +95,4 @@ jobs:
       - name: Upload release asset
         id: upload-release-asset
         uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}
-          asset_name: ${{ github.event.inputs.file_name || steps.determine_file_info.outputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}
-          asset_content_type: application/octet-stream
-
-      - name: Cleanup
-        run: |
-          rm -f .gitattributes
-          git rm .gitattributes
-          git commit -m "Remove .gitattributes" || echo "No changes to commit"
-          git push
+        
