@@ -6,7 +6,6 @@ on:
       file_url:
         description: 'URL của file cần tải'
         required: true
-        default: ''
       file_name:
         description: 'Tên lưu file đã tải (để trống để sử dụng tên file gốc từ URL)'
         required: false
@@ -27,38 +26,46 @@ jobs:
 
       - name: Identify file name and extension
         run: |
+          set -e  # Exit on any error
           FILE_URL="${{ github.event.inputs.file_url }}"
-          # Cố gắng lấy tên file từ Content-Disposition header
-          FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=".*"' | sed -e 's/filename="//' -e 's/"$//')
-          if [ -z "$FILE_NAME" ]; then
-            # Lấy tên file từ URL nếu không có header
-            FILE_NAME=$(basename "$FILE_URL")
-            # Nếu tên file từ URL không hợp lệ hoặc không có phần mở rộng
-            if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
-              FILE_NAME="temp.file"
+          INPUT_FILE_NAME="${{ github.event.inputs.file_name }}"
+
+          echo "Fetching headers from URL: $FILE_URL"
+          HEADERS=$(curl -sI "$FILE_URL")
+
+          # Attempt to get the file name from the Content-Disposition header
+          DEFAULT_FILE_NAME=$(echo "$HEADERS" | grep -o -E 'filename="[^"]+"' | sed -e 's/filename="//' -e 's/"$//')
+
+          if [ -z "$DEFAULT_FILE_NAME" ]; then
+            DEFAULT_FILE_NAME=$(basename "$FILE_URL" | cut -d'?' -f1)
+            if [[ ${#DEFAULT_FILE_NAME} -gt 50 || ! "$DEFAULT_FILE_NAME" == *.* ]]; then
+              DEFAULT_FILE_NAME="temp.file"
             fi
           fi
-          # Xác định phần mở rộng của file
-          MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*')
+
+          # Get the MIME type to determine the file extension
+          MIME_TYPE=$(echo "$HEADERS" | grep -oP 'Content-Type: \K[^;]+')
           EXTENSION="${MIME_TYPE##*/}"
-          echo "FILE_NAME_WITH_EXT=${FILE_NAME}.${EXTENSION}" >> $GITHUB_ENV
+
+          if [ -z "$INPUT_FILE_NAME" ]; then
+            FILE_NAME="$DEFAULT_FILE_NAME"
+          else
+            FILE_NAME="$INPUT_FILE_NAME"
+          fi
+
+          if [[ "$FILE_NAME" != *.* ]]; then
+            FILE_NAME="${FILE_NAME}.${EXTENSION}"
+          fi
+
+          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
           echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME_WITH_EXT }}"
-
-      - name: Rename file if necessary
-        if: ${{ github.event.inputs.file_name }}
         run: |
-          FILE_NAME="${{ github.event.inputs.file_name }}"
-          FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
-          # Kiểm tra xem tên thay thế có phần mở rộng hay không
-          if [[ "$FILE_NAME" == *.* ]]; then
-            mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
-          else
-            mv "${{ env.FILE_NAME_WITH_EXT }}" "${FILE_NAME}.${FILE_EXTENSION}"
-          fi
-          echo "FINAL_FILE_NAME=${FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ env.FILE_NAME }}"
+          echo "Downloading file from: $FILE_URL"
+          wget "$FILE_URL" -O "$FILE_NAME"
 
       - name: Determine new release version
         run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
@@ -84,23 +91,23 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.FINAL_FILE_NAME }}
-          asset_name: ${{ env.FINAL_FILE_NAME }}
+          asset_path: ${{ github.workspace }}/${{ env.FILE_NAME }}
+          asset_name: ${{ env.FILE_NAME }}
           asset_content_type: application/octet-stream
 
       - name: Update release notes with preview
         run: |
           ASSET_URL=$(jq --raw-output '.browser_download_url' <<< "${{ steps.upload_release_asset.outputs }}")
-          echo "ASSET_URL=$ASSET_URL" >> $GITHUB_ENV
-          PREVIEW_TEXT=""
-          if [[ "${{ env.FILE_EXTENSION }}" =~ ^(jpg|png|gif)$ ]]; then
-            PREVIEW_TEXT="!Image Preview"
+          PREVIEW_TEXT="File Download Link: $ASSET_URL"
+
+          if [[ "${{ env.FILE_EXTENSION }}" =~ ^(jpg|jpeg|png|gif)$ ]]; then
+            PREVIEW_TEXT="![Image Preview]($ASSET_URL)"
           elif [[ "${{ env.FILE_EXTENSION }}" =~ ^(mp3|wav)$ ]]; then
-            PREVIEW_TEXT="Listen to Audio"
+            PREVIEW_TEXT="[Listen to Audio]($ASSET_URL)"
           elif [[ "${{ env.FILE_EXTENSION }}" =~ ^(mp4|avi)$ ]]; then
-            PREVIEW_TEXT="Watch Video"
+            PREVIEW_TEXT="[Watch Video]($ASSET_URL)"
           fi
-          gh release edit "${{ env.release_version }}" --notes "${PREVIEW_TEXT}"
+          
+          gh release edit "${{ env.release_version }}" --notes "$PREVIEW_TEXT"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          
