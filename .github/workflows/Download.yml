@@ -1,78 +1,77 @@
-name: High-Speed File Downloader and Releaser with Preview Link
+name: Download File and Release
 
 on:
   workflow_dispatch:
     inputs:
       file_url:
-        description: 'URL của file để tải xuống'
+        description: 'URL of the file to download'
         required: true
-      file_name:
-        description: 'Tên mới cho file (tùy chọn)'
+        default: ''
+      replace_file_name:
+        description: 'Replacement file name (leave blank to use original filename from URL)'
         required: false
+        default: ''
 
 jobs:
-  download-and-release:
+  download_and_release:
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true  # Thiết lập để sử dụng Git LFS
 
-    - name: Get current date and start time
-      run: |
-        echo "start_time=$(date +"%T")" >> $GITHUB_ENV
-        echo "start_date=$(date +"%Y-%m-%d")" >> $GITHUB_ENV
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
 
-    - name: Download File
-      run: |
-        start=$(date +%s)
-        curl -L ${{ github.event.inputs.file_url }} -o "${{ github.event.inputs.file_name || 'tempfile' }}"
-        end=$(date +%s)
-        echo "download_duration=$((end-start)) seconds" >> $GITHUB_ENV
-      
-    - name: Extract File Extension
-      if: ${{ github.event.inputs.file_name == '' }}
-      run: |
-        filename=$(basename ${{ github.event.inputs.file_url }})
-        extension="${filename##*.}"
-        echo "File extension is $extension"
-        echo "extension=$extension" >> $GITHUB_ENV
+      - name: Setup Git LFS
+        run: |
+          git lfs install
+          git lfs track "${{ github.event.inputs.file_name }}"
+          git add .gitattributes
+          git commit -m "Setup Git LFS"
+          git push
 
-    - name: Rename File
-      run: |
-        if [[ -z "${{ github.event.inputs.file_name }}" ]]; then
-          mv tempfile $(basename ${{ github.event.inputs.file_url }})
-        elif [[ "${{ github.event.inputs.file_name }}" != *.* ]]; then
-          filename=$(basename ${{ github.event.inputs.file_url }})
-          extension="${filename##*.}"
-          mv tempfile "${{ github.event.inputs.file_name }}.$extension"
-        else
-          mv tempfile "${{ github.event.inputs.file_name }}"
-        fi
+      - name: Determine file name
+        id: determine_file_name
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME=$(basename "${FILE_URL}")
+          if [ ${#FILE_NAME} -gt 255 ]; then
+            echo "File name is too long, using temporary name 'temp.file'"
+            FILE_NAME="temp.file"
+          fi
+          echo "::set-output name=file_name::${FILE_NAME}"
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ github.run_id }}
-        release_name: Release-${{ github.run_id }}
-        body: |
-          File được tải xuống từ: ${{ github.event.inputs.file_url }}
-          Xem trước file tại: Preview
-          Ngày tải xuống: ${{ env.start_date }}
-          Thời gian bắt đầu: ${{ env.start_time }}
-          Thời lượng tải xuống: ${{ env.download_duration }} giây
-        draft: false
-        prerelease: false
+      - name: Download file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
 
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
-        asset_name: ${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
-        asset_content_type: application/octet-stream
-        
+      - name: Determine new file name and extension
+        id: determine_new_file_name
+        if: ${{ github.event.inputs.replace_file_name != '' }}
+        run: |
+          NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}"
+          EXTENSION="${{ steps.determine_file_name.outputs.file_name | split: '.' | last }}"
+          if [ ${{ github.event.inputs.replace_file_name }} != ${{ github.event.inputs.replace_file_name | split: '.' | first }} ]; then
+            NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}"
+          else
+            NEW_FILE_NAME="${{ github.event.inputs.replace_file_name }}.${{ EXTENSION }}"
+          fi
+          echo "::set-output name=new_file_name::${NEW_FILE_NAME}"
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.0.${{ github.run_number }}
+          release_name: Release v1.0.${{ github.run_number }}
+          body: |
+            File URL: ${{ github.event.inputs.file_url }}
+            New file name: ${{ steps.determine_new_file_name.outputs.new_file_name }}
+          draft: false
+          prerelease: false
