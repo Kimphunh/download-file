@@ -7,8 +7,8 @@ on:
         description: 'URL of the file to download'
         required: true
         default: ''
-      new_file_name:
-        description: 'New name for the downloaded file (leave blank to keep original name)'
+      file_name:
+        description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
         required: false
         default: ''
 
@@ -27,59 +27,58 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
 
-      - name: Check for .gitattributes
+      - name: Setup Git LFS (if necessary)
         run: |
-          if [ -f ".gitattributes" ]; then
-            echo ".gitattributes exists"
-          else
-            echo ".gitattributes does not exist"
+          if [ ! -f .gitattributes ]; then
+            git lfs install
+            git lfs track "${{ github.event.inputs.file_name }}"
+            git add .gitattributes
+            git commit -m "Setup Git LFS"
+            git push
           fi
 
       - name: Determine file name
         id: determine_file_name
         run: |
-          FILE_URL=${{ github.event.inputs.file_url }}
-          FILE_NAME=$(basename ${FILE_URL})
-          if [ ${#FILE_NAME} -gt 50 ]; then
-            # Send query to server to get file name
-            FILE_NAME=$(curl -sI ${FILE_URL} | grep -i "^content-disposition" | sed 's/.*filename=//' | tr -d '\r\n')
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME=$(basename "${FILE_URL}")
+          if [[ ${#FILE_NAME} -gt 50 || ! "${FILE_NAME}" =~ \..* ]]; then
+            FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
+            if [[ -z "$FILE_NAME" ]]; then
+              FILE_NAME="file.temp"
+            fi
           fi
-          if [ -z "${FILE_NAME}" ]; then
-            # Fallback to temporary name if unable to get file name
-            FILE_NAME=file.temp
-          fi
-          echo "::set-output name=file_name::${FILE_NAME}"
+          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
 
       - name: Download file
-        run: wget ${{ github.event.inputs.file_url }} -O ${{ steps.determine_file_name.outputs.file_name }}
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.file_name }}"
 
-      - name: Finalize file name
-        if: ${{ github.event.inputs.new_file_name }}
+      - name: Rename file if necessary
+        if: ${{ github.event.inputs.file_name }}
         run: |
-          NEW_FILE_NAME=${{ github.event.inputs.new_file_name }}
-          FILE_EXTENSION=${{ steps.determine_file_name.outputs.file_name##*. }}
-          mv ${{ steps.determine_file_name.outputs.file_name }} ${NEW_FILE_NAME}.${FILE_EXTENSION}
+          ORIGINAL_FILE_NAME="${{ env.file_name }}"
+          NEW_FILE_NAME="${{ github.event.inputs.file_name }}"
+          FILE_EXTENSION="${ORIGINAL_FILE_NAME##*.}"
+          mv "$ORIGINAL_FILE_NAME" "${NEW_FILE_NAME}.${FILE_EXTENSION}"
+          echo "final_file_name=${NEW_FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
 
       - name: Determine new release version
         id: determine_release_version
-        run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
+        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
 
       - name: Create release notes
         id: create_release_notes
         run: |
-          FILE_URL=${{ github.event.inputs.file_url }}
-          FILE_NAME=${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}
-          FILE_EXTENSION=${{ steps.determine_file_name.outputs.file_name##*. }}
-          
-          if [[ $FILE_EXTENSION == "jpg" || $FILE_EXTENSION == "jpeg" || $FILE_EXTENSION == "png" || $FILE_EXTENSION == "gif" ]]; then
-            PREVIEW="<img src='${FILE_NAME}.${FILE_EXTENSION}' alt='${FILE_NAME}' width='600' />"
-          elif [[ $FILE_EXTENSION == "mp4" || $FILE_EXTENSION == "webm" || $FILE_EXTENSION == "ogg" ]]; then
-            PREVIEW="<video width='600' controls><source src='${FILE_NAME}.${FILE_EXTENSION}' type='video/${FILE_EXTENSION}'></video>"
-          else
-            PREVIEW="No preview available for this file type."
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ env.final_file_name || env.file_name }}"
+          ERROR_MSG=""
+
+          if [[ "$FILE_NAME" == "file.temp" ]]; then
+            ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
           fi
-          
-          echo "::set-output name=release_notes::File URL: ${FILE_URL}<br>${PREVIEW}"
+
+          RELEASE_NOTES="File URL: ${FILE_URL}<br>${ERROR_MSG}"
+          echo "release_notes=${RELEASE_NOTES}" >> $GITHUB_ENV
 
       - name: Create release
         id: create_release
@@ -87,9 +86,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
-          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
-          body: ${{ steps.create_release_notes.outputs.release_notes }}
+          tag_name: ${{ env.release_version }}
+          release_name: Release ${{ env.release_version }}
+          body: ${{ env.release_notes }}
           draft: false
           prerelease: false
 
@@ -100,13 +99,15 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name##*. }}
-          asset_name: ${{ github.event.inputs.new_file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_name.outputs.file_name##*. }}
+          asset_path: ${{ github.workspace }}/${{ env.final_file_name || env.file_name }}
+          asset_name: ${{ env.final_file_name || env.file_name }}
           asset_content_type: application/octet-stream
 
       - name: Cleanup
         run: |
-          rm -f .gitattributes
-          git rm .gitattributes
-          git commit -m "Remove .gitattributes" || echo "No changes to commit"
-          git push
+          if [ -f .gitattributes ]; then
+            rm -f .gitattributes
+            git rm .gitattributes
+            git commit -m "Remove .gitattributes" || echo "No changes to commit"
+            git push
+          fi
