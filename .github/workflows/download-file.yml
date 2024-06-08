@@ -19,21 +19,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v2
-        with:
-          lfs: true
 
-      - name: Set up Git
+      - name: Check for .gitattributes
+        id: check_gitattributes
         run: |
-          git config --global user.name 'github-actions'
-          git config --global user.email 'github-actions@github.com'
-
-      - name: Setup Git LFS
-        run: |
-          git lfs install
-          echo "*.temp filter=lfs diff=lfs merge=lfs -text" > .gitattributes
-          git add .gitattributes
-          git commit -m "Setup Git LFS"
-          git push
+          if [ -f .gitattributes ]; then
+            echo ".gitattributes exists."
+          else
+            echo ".gitattributes does not exist."
+            touch .gitattributes
+            git lfs track "${{ github.event.inputs.file_name }}"
+            git add .gitattributes
+            git commit -m "Setup Git LFS"
+            git push
+          fi
 
       - name: Determine file name
         id: determine_file_name
@@ -41,58 +40,29 @@ jobs:
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME=$(basename "${FILE_URL}")
           if [[ ${#FILE_NAME} -gt 50 || ! "${FILE_NAME}" =~ .*\..* ]]; then
-            FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
-            if [[ -z "$FILE_NAME" ]]; then
-              FILE_NAME="file.temp"
-              echo "ERROR_MSG=Lỗi: Không thể lấy tên tệp từ server." >> $GITHUB_ENV
-            fi
+            FILE_NAME="file.temp"
           fi
-          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+          echo "::set-output name=file_name::${FILE_NAME}"
 
       - name: Determine file extension
         id: determine_file_extension
         run: |
-          FILE_NAME="${{ env.FILE_NAME }}"
-          FILE_EXTENSION="${FILE_NAME##*.}"
-          if [[ "$FILE_EXTENSION" == "$FILE_NAME" ]]; then
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_EXTENSION="${FILE_URL##*.}"
+          if [[ ! "${FILE_EXTENSION}" =~ ^[a-zA-Z0-9]+$ ]]; then
             FILE_EXTENSION="temp"
           fi
-          echo "FILE_EXTENSION=$FILE_EXTENSION" >> $GITHUB_ENV
+          echo "::set-output name=file_extension::$FILE_EXTENSION"
 
       - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME }}"
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ github.event.inputs.file_name || steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}"
 
-      - name: Finalize file name
-        if: ${{ github.event.inputs.file_name != '' }}
+      - name: Rename file if necessary
+        if: ${{ github.event.inputs.file_name }}
         run: |
-          FINAL_NAME="${{ github.event.inputs.file_name }}.${{ env.FILE_EXTENSION }}"
-          mv "${{ env.FILE_NAME }}" "$FINAL_NAME"
-          echo "FINAL_NAME=$FINAL_NAME" >> $GITHUB_ENV
+          mv "${{ github.workspace }}/${{ steps.determine_file_name.outputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}" "${{ github.workspace }}/${{ github.event.inputs.file_name }}.${{ steps.determine_file_extension.outputs.file_extension }}"
 
-      - name: Determine new release version
-        id: determine_release_version
-        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
-
-      - name: Create release notes
-        id: create_release_notes
-        run: |
-          FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME="${{ env.FINAL_NAME || env.FILE_NAME }}"
-          ERROR_MSG="${{ env.ERROR_MSG || '' }}"
-          
-          echo "release_notes=File URL: ${FILE_URL}<br>${ERROR_MSG}" >> $GITHUB_ENV
-
-      - name: Create release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ env.release_version }}
-          release_name: Release ${{ env.release_version }}
-          body: ${{ env.release_notes }}
-          draft: false
-          prerelease: false
+      # ... (các bước tiếp theo không thay đổi)
 
       - name: Upload release asset
         id: upload-release-asset
@@ -101,13 +71,13 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/$(if [ -n "${{ env.FINAL_NAME }}" ]; then echo ${{ env.FINAL_NAME }}; else echo ${{ env.FILE_NAME }}; fi)
-          asset_name: $(if [ -n "${{ env.FINAL_NAME }}" ]; then echo ${{ env.FINAL_NAME }}; else echo ${{ env.FILE_NAME }}; fi)
+          asset_path: ${{ github.workspace }}/${{ github.event.inputs.file_name || 'file' }}.${{ steps.determine_file_extension.outputs.file_extension }}
+          asset_name: ${{ github.event.inputs.file_name || 'file' }}.${{ steps.determine_file_extension.outputs.file_extension }}
           asset_content_type: application/octet-stream
 
       - name: Cleanup
         run: |
-          rm -f .gitattributes
-          git rm .gitattributes
+          git rm -f .gitattributes
           git commit -m "Remove .gitattributes" || echo "No changes to commit"
           git push
+          
