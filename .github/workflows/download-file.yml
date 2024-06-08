@@ -54,12 +54,12 @@ jobs:
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
 
       - name: Finalize file name
-        if: ${{ github.event.inputs.new_file_name }}
-        run: |
-          NEW_FILE_NAME="${{ github.event.inputs.new_file_name }}"
-          EXTENSION="${{ steps.determine_file_name.outputs.file_name | splitext | last }}"
-          mv "${{ steps.determine_file_name.outputs.file_name }}" "${NEW_FILE_NAME}.${EXTENSION}"
-
+  if: ${{ github.event.inputs.new_file_name }}
+  run: |
+    NEW_FILE_NAME="${{ github.event.inputs.new_file_name }}"
+    FILE_EXTENSION="${{ steps.determine_file_name.outputs.file_name | splitext | last }}"
+    mv "${{ steps.determine_file_name.outputs.file_name }}" "${NEW_FILE_NAME}.${FILE_EXTENSION}"
+    
       - name: Determine new release version
         id: determine_release_version
         run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
