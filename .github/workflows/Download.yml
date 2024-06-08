@@ -38,9 +38,16 @@ jobs:
         echo "extension=$extension" >> $GITHUB_ENV
 
     - name: Rename File
-      if: ${{ github.event.inputs.file_name != '' && ! github.event.inputs.file_name == *.* }}
       run: |
-        mv "tempfile" "${{ github.event.inputs.file_name }}.${{ env.extension }}"
+        if [[ -z "${{ github.event.inputs.file_name }}" ]]; then
+          mv tempfile $(basename ${{ github.event.inputs.file_url }})
+        elif [[ "${{ github.event.inputs.file_name }}" != *.* ]]; then
+          filename=$(basename ${{ github.event.inputs.file_url }})
+          extension="${filename##*.}"
+          mv tempfile "${{ github.event.inputs.file_name }}.$extension"
+        else
+          mv tempfile "${{ github.event.inputs.file_name }}"
+        fi
 
     - name: Create Release
       id: create_release
@@ -65,7 +72,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
-        asset_name: ${{ github.event.inputs.file_name || 'tempfile' }}.${{ env.extension }}
+        asset_path: ${{ github.event.inputs.file_name || $(basename ${{ github.event.inputs.file_url }}) }}
+        asset_name: ${{ github.event.inputs.file_name || $(basename ${{ github.event.inputs.file_url }}) }}
         asset_content_type: application/octet-stream
         
