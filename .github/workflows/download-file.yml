@@ -51,13 +51,12 @@ jobs:
 
       - name: Download file
         run: |
-          # Extract server name from URL
-          SERVER_NAME=$(echo "${{ github.event.inputs.file_url }}" | cut -d '/' -f 3)
-
-          # Construct filename using server name and extension
-          FILE_NAME="${SERVER_NAME}.${{ steps.determine_file_extension.outputs.file_extension }}"
-
-          wget "${{ github.event.inputs.file_url }}" -O "$FILE_NAME"
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          if [ -z "${{ github.event.inputs.file_name }}" ]; then
+            wget --content-disposition "$FILE_URL"
+          else
+            wget "$FILE_URL" -O "${{ github.event.inputs.file_name }}"
+          fi
 
       - name: Determine new release version
         id: determine_release_version
