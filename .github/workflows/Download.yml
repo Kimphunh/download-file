@@ -29,13 +29,14 @@ jobs:
         id: file_info
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME="${{ github.event.inputs.file_name }}"
+          # Cố gắng lấy tên file từ Content-Disposition header
+          FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=".*"' | sed -e 's/filename="//' -e 's/"$//')
           if [ -z "$FILE_NAME" ]; then
-            # Cố gắng lấy tên file từ header response khi download
-            FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
-            if [ -z "$FILE_NAME" ]; then
-              # Lấy tên file từ URL nếu không có header
-              FILE_NAME=$(basename "$FILE_URL")
+            # Lấy tên file từ URL nếu không có header
+            FILE_NAME=$(basename "$FILE_URL")
+            # Nếu tên file từ URL không hợp lệ hoặc không có phần mở rộng
+            if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
+              FILE_NAME="temp.file"
             fi
           fi
           # Xác định phần mở rộng của file
