@@ -1,0 +1,100 @@
+name: Download File and Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'URL of the file to download'
+        required: true
+        default: ''
+      new_file_name:
+        description: 'New name for the downloaded file (leave blank to keep original)'
+        required: false
+        default: ''
+
+jobs:
+  download_and_release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+
+      - name: Check if .gitattributes exists
+        run: |
+          if [ -f ".gitattributes" ]; then
+            echo "Git attributes file exists"
+          else
+            echo "Git attributes file does not exist"
+          fi
+
+      - name: Determine file name
+        id: determine_file_name
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          TEMP_FILE_NAME=$(basename "${FILE_URL}")
+          if [ ${#TEMP_FILE_NAME} -gt 50 ] || [[ ! $TEMP_FILE_NAME =~ \. ]]; then
+            TEMP_FILE_NAME="file.temp"
+          fi
+          echo "::set-output name=file_name::$TEMP_FILE_NAME"
+
+      - name: Download file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
+
+      - name: Finalize file name
+        if: ${{ github.event.inputs.new_file_name != '' }}
+        run: |
+          NEW_FILE_NAME="${{ github.event.inputs.new_file_name }}"
+          FILE_NAME="${{ steps.determine_file_name.outputs.file_name }}"
+          FILE_EXTENSION="${FILE_NAME##*.}"
+          FINAL_FILE_NAME="${NEW_FILE_NAME}.${FILE_EXTENSION}"
+          mv "${FILE_NAME}" "${FINAL_FILE_NAME}"
+          echo "::set-output name=file_name::$FINAL_FILE_NAME"
+
+      - name: Determine new release version
+        id: determine_release_version
+        run: echo "::set-output name=release_version::v1.0.$(( ${{ github.run_number }} + 1 ))"
+
+      - name: Create release notes
+        id: create_release_notes
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ steps.determine_file_name.outputs.file_name }}"
+          echo "::set-output name=release_notes::File URL: ${FILE_URL}<br><img src='${FILE_NAME}' alt='${FILE_NAME}' width='600' />"
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.determine_release_version.outputs.release_version }}
+          release_name: Release ${{ steps.determine_release_version.outputs.release_version }}
+          body: ${{ steps.create_release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: false
+
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ steps.determine_file_name.outputs.file_name }}
+          asset_name: ${{ steps.determine_file_name.outputs.file_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Cleanup
+        run: |
+          rm -f .gitattributes
+          git rm .gitattributes
+          git commit -m "Remove .gitattributes" || echo "No changes to commit"
+          git push
