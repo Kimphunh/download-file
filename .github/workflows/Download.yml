@@ -1,4 +1,4 @@
-name: Download and Release
+name: High-Speed Download and Release
 
 on:
   workflow_dispatch:
@@ -6,53 +6,56 @@ on:
       file_url:
         description: 'URL of the file to download'
         required: true
-        type: string
-      file_name:
-        description: 'Optional name for the downloaded file (with extension)'
+      replacement_name:
+        description: 'Replacement name for the file (optional)'
         required: false
-        type: string
 
 jobs:
-  download_and_release:
+  download-and-release:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v2
 
-    - name: Set Variables
-      id: vars
-      run: |
-        echo "FILE_URL=${{ github.event.inputs.file_url }}" >> $GITHUB_ENV
-        if [ -z "${{ github.event.inputs.file_name }}" ]; then
-          FILE_NAME=$(basename ${{ github.event.inputs.file_url }})
-        else
-          FILE_NAME=${{ github.event.inputs.file_name }}
-        fi
-        echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+      - name: Download File
+        id: download
+        run: |
+          url="${{ github.event.inputs.file_url }}"
+          name="${{ github.event.inputs.replacement_name }}"
+          if [ -z "$name" ]; then
+            name=$(basename "$url")
+          elif [[ "$name" != *.* ]]; then
+            extension="${url##*.}"
+            name="$name.$extension"
+          fi
+          curl -L -o "$name" "$url" --progress-bar
 
-    - name: Download File
-      run: |
-        curl -L ${{ env.FILE_URL }} -o ${{ env.FILE_NAME }}
+      - name: Upload to Release
+        id: upload-release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ steps.download.outputs.name }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: "release-${{ github.run_number }}"
-        release_name: "Release ${{ github.run_number }}"
-        body: "Downloaded from: ${{ env.FILE_URL }}"
-        draft: false
-        prerelease: false
-
-    - name: Upload Release Asset
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ env.FILE_NAME }}
-        asset_name: ${{ env.FILE_NAME }}
-        asset_content_type: $(file --mime-type -b ${{ env.FILE_NAME }})
+      - name: Update Release Notes
+        run: |
+          file_name="${{ steps.download.outputs.name }}"
+          extension="${file_name##*.}"
+          case "$extension" in
+            mov|mp4|mkv|avi|wmv|flv|mpg|mpeg|3gp|m4v|webm|ogv|rm|rmvb|ts|vob|divx|m3u8)
+              echo "Preview Video: $file_name" >> release_notes.md
+              ;;
+            jpg|jpeg|png|gif|bmp|tiff|svg|webp|psd)
+              echo "Preview Image: $file_name" >> release_notes.md
+              ;;
+            mp3|wav|ogg|flac|aac|wma|m4a|aiff|alac|opus)
+              echo "Preview Audio: $file_name" >> release_notes.md
+              ;;
+            zip)
+              echo "Contents of the ZIP file:" >> release_notes.md
+              unzip -l "$file_name" >> release_notes.md
+              ;;
+          esac
+          cat release_notes.md
+          
