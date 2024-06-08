@@ -30,7 +30,7 @@ jobs:
       - name: Setup Git LFS
         run: |
           git lfs install
-          touch .gitattributes
+          echo "*.temp filter=lfs diff=lfs merge=lfs -text" > .gitattributes
           git add .gitattributes
           git commit -m "Setup Git LFS"
           git push
@@ -101,8 +101,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.FINAL_NAME || env.FILE_NAME }}
-          asset_name: ${{ env.FINAL_NAME || env.FILE_NAME }}
+          asset_path: ${{ github.workspace }}/$(if [ -n "${{ env.FINAL_NAME }}" ]; then echo ${{ env.FINAL_NAME }}; else echo ${{ env.FILE_NAME }}; fi)
+          asset_name: $(if [ -n "${{ env.FINAL_NAME }}" ]; then echo ${{ env.FINAL_NAME }}; else echo ${{ env.FILE_NAME }}; fi)
           asset_content_type: application/octet-stream
 
       - name: Cleanup
