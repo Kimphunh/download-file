@@ -25,6 +25,7 @@ jobs:
           git config --global user.email 'github-actions@github.com'
 
       - name: Identify file name and extension
+        id: identify_file
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
           FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
@@ -55,9 +56,8 @@ jobs:
             mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
             echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
           else
-            mv "${FILE_NAME}.${FILE_EXTENSION}"
+            mv "${{ env.FILE_NAME_WITH_EXT }}" "${FILE_NAME}.${FILE_EXTENSION}"
             echo "FINAL_FILE_NAME=${FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
-          fi
 
       - name: Determine new release version
         run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
@@ -66,7 +66,7 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
         with:
           tag_name: ${{ env.release_version }}
           release_name: Release ${{ env.release_version }}
@@ -80,7 +80,7 @@ jobs:
         id: upload_release_asset
         uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
           asset_path: ${{ github.workspace }}/${{ env.FINAL_FILE_NAME }}
@@ -102,4 +102,4 @@ jobs:
           fi
           gh release edit "${{ env.release_version }}" --add "$PREVIEW_TEXT"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
