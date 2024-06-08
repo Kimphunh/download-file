@@ -1,4 +1,4 @@
-name: High-Speed Download and Release
+name: Download and Release File
 
 on:
   workflow_dispatch:
@@ -6,56 +6,155 @@ on:
       file_url:
         description: 'URL of the file to download'
         required: true
-      replacement_name:
-        description: 'Replacement name for the file (optional)'
+      replace_name:
+        description: 'Replacement name for the downloaded file'
         required: false
 
 jobs:
-  download-and-release:
+  download_and_release:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v2
 
-      - name: Download File
-        id: download
+      - name: Setup Git LFS (if necessary)
         run: |
-          url="${{ github.event.inputs.file_url }}"
-          name="${{ github.event.inputs.replacement_name }}"
-          if [ -z "$name" ]; then
-            name=$(basename "$url")
-          elif [[ "$name" != *.* ]]; then
-            extension="${url##*.}"
-            name="$name.$extension"
+          if [ ! -f .gitattributes ]; then
+            git lfs install
+            git lfs track "${{ github.event.inputs.replace_name }}"
+            git add .gitattributes
+            git commit -m "Setup Git LFS"
+            git push
           fi
-          curl -L -o "$name" "$url" --progress-bar
 
-      - name: Upload to Release
-        id: upload-release
-        uses: softprops/action-gh-release@v1
-        with:
-          files: ${{ steps.download.outputs.name }}
+      - name: Determine file name
+        id: determine_file_name
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME=$(basename "${FILE_URL}")
+          if [[ ${#FILE_NAME} -gt 50 || ! "${FILE_NAME}" =~ \..* ]]; then
+            FILE_NAME=$(curl -sI "${FILE_URL}" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
+            if [[ -z "$FILE_NAME" ]]; then
+              FILE_NAME="file.temp"
+            fi
+          fi
+          echo "::set-output name=file_name::$FILE_NAME"
+
+      - name: Download file
+        run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
+
+      - name: Rename file if necessary
+        if: ${{ github.event.inputs.replace_name }}
+        run: |
+          ORIGINAL_FILE_NAME="${{ steps.determine_file_name.outputs.file_name }}"
+          NEW_FILE_NAME="${{ github.event.inputs.replace_name }}"
+          FILE_EXTENSION="${ORIGINAL_FILE_NAME##*.}"
+          mv "$ORIGINAL_FILE_NAME" "${NEW_FILE_NAME}.${FILE_EXTENSION}"
+          echo "::set-output name=final_file_name::${NEW_FILE_NAME}.${FILE_EXTENSION}"
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.run_id }}
+          release_name: Release ${{ github.run_id }}
+          body: |
+            Preview:
+            ${{ steps.preview.outputs.preview_html }}
+          draft: false
+          prerelease: false
 
-      - name: Update Release Notes
+      - name: Upload release asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ steps.determine_file_name.outputs.file_name }}
+          asset_name: ${{ steps.determine_file_name.outputs.file_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Cleanup
         run: |
-          file_name="${{ steps.download.outputs.name }}"
-          extension="${file_name##*.}"
-          case "$extension" in
-            mov|mp4|mkv|avi|wmv|flv|mpg|mpeg|3gp|m4v|webm|ogv|rm|rmvb|ts|vob|divx|m3u8)
-              echo "Preview Video: $file_name" >> release_notes.md
-              ;;
-            jpg|jpeg|png|gif|bmp|tiff|svg|webp|psd)
-              echo "Preview Image: $file_name" >> release_notes.md
-              ;;
-            mp3|wav|ogg|flac|aac|wma|m4a|aiff|alac|opus)
-              echo "Preview Audio: $file_name" >> release_notes.md
-              ;;
-            zip)
-              echo "Contents of the ZIP file:" >> release_notes.md
-              unzip -l "$file_name" >> release_notes.md
-              ;;
-          esac
-          cat release_notes.md
+          if [ -f .gitattributes ]; then
+            rm -f .gitattributes
+            git rm .gitattributes
+            git commit -m "Remove .gitattributes" || echo "No changes to commit"
+            git push
+          fi
+
+      - name: Determine file extension
+        id: determine_file_extension
+        run: |
+          FILE_EXTENSION="${{ steps.determine_file_name.outputs.file_name##*. }}"
+          echo "::set-output name=file_extension::$FILE_EXTENSION"
+
+      - name: Preview
+        id: preview
+        run: |
+          PREVIEW_HTML=""
+          FILE_EXTENSION="${{ steps.determine_file_extension.outputs.file_extension }}"
+          if [[ "$FILE_EXTENSION" =~ ^(mov|mp4|mkv|avi|wmv|flv|mpg|mpeg|3gp|m4v|webm|ogv|rm|rmvb|ts|vob|divx|m3u8)$ ]]; then
+            PREVIEW_HTML="<video width='320' height='240' controls><source src='${{ steps.create_release.outputs.html_url }}' type='video/mp4'></video>"
+          elif [[ "$FILE_EXTENSION" =~ ^(jpg|jpeg|png|gif|bmp|tiff|svg|webp|psd)$ ]]; then
+            PREVIEW_HTML="<img src='${{ steps.create_release.outputs.html_url }}' alt='Preview image' width='500'>"
+          elif [[ "$FILE_EXTENSION" =~ ^(mp3|wav|ogg|flac|aac|wma|m4a|aiff|alac|opus)$ ]]; then
+            PREVIEW_HTML="<audio controls><source src='${{ steps.create_release.outputs.html_url }}' type='audio/mpeg'></audio>"
+          elif [[ "$FILE_EXTENSION" == "zip" ]]; then
+            PREVIEW_HTML="This is a ZIP file containing the following items:<br>"
+            unzip -l "${{ steps.determine_file_name.outputs.file_name }}" | sed '1,3d' | awk '{print $4}' | while read -r LINE; do
+              PREVIEW_HTML+="$LINE<br>"
+            done
+          fi
+          echo "::set-output name=preview_html::${PREVIEW_HTML}"
+
+      - name: Create release notes
+        id: create_release_notes
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ steps.rename.outputs.final_file_name || steps.determine_file_name.outputs.file_name }}"
+          FILE_EXTENSION="${{ steps.determine_file_extension.outputs.file_extension }}"
+          ERROR_MSG=""
           
+          if [[ $FILE_NAME == "file.temp" && $FILE_EXTENSION == "temp" ]]; then
+            ERROR_MSG="Error: Unable to retrieve filename and extension from the server."
+          fi
+          
+          # ... (phần tạo preview không thay đổi)
+          
+          echo "::set-output name=release_notes::File URL: ${FILE_URL}<br>${PREVIEW}<br>${ERROR_MSG}"
+
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.create_release_notes.outputs.release_version }}
+          release_name: Release ${{ steps.create_release_notes.outputs.release_version }}
+          body: ${{ steps.create_release_notes.outputs.release_notes }}
+          draft: false
+          prerelease: false
+
+      - name: Upload release asset
+        id: upload-release-asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ steps.determine_file_name.outputs.file_name }}
+          asset_name: ${{ steps.determine_file_name.outputs.file_name }}
+          asset_content_type: application/octet-stream
+
+      - name: Cleanup
+        run: |
+          if [ -f .gitattributes ]; then
+            rm -f .gitattributes
+            git rm .gitattributes
+            git commit -m "Remove .gitattributes" || echo "No changes to commit"
+            git push
+          fi
