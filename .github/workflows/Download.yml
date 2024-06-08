@@ -60,14 +60,24 @@ jobs:
           fi
           echo "::set-output name=new_file_name::${NEW_FILE_NAME}"
 
+      - name: Determine new release version
+        id: determine_release_version
+        run: |
+          LAST_RELEASE_TAG=$(git describe --abbrev=0 --tags)
+          LAST_VERSION=${LAST_RELEASE_TAG#v*}
+          IFS='.' read -r major minor patch <<< "$LAST_VERSION"
+          NEW_PATCH=$((patch + 1))
+          NEW_VERSION="v${major}.${minor}.${NEW_PATCH}"
+          echo "::set-output name=new_release_version::${NEW_VERSION}"
+
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v1.0.${{ github.run_number }}
-          release_name: Release v1.0.${{ github.run_number }}
+          tag_name: ${{ needs.determine_release_version.outputs.new_release_version }}
+          release_name: Release ${{ needs.determine_release_version.outputs.new_release_version }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
           draft: false
