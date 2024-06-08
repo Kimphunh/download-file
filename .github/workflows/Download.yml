@@ -36,16 +36,16 @@ jobs:
           git push
 
       - name: Determine file name
-        id: determine_file_name
-        run: |
-          FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME=$(basename "${FILE_URL}")
-          if [ ${#FILE_NAME} -gt 255 ]; then
-            echo "File name is too long, using temporary name 'temp.file'"
-            FILE_NAME="temp.file"
-          fi
-          echo "::set-output name=file_name::${FILE_NAME}"
-
+       id: determine_file_name
+       run: |
+         FILE_URL="${{ github.event.inputs.file_url }}"
+         FILE_NAME=$(basename "${FILE_URL}" | cut -c 1-50)
+         if [ ${#FILE_NAME} -eq 0 ]; then
+           echo "Could not determine file name, using temporary name 'temp.file'"
+           FILE_NAME="temp.file"
+         fi
+         echo "::set-output name=file_name::${FILE_NAME}"
+    
       - name: Download file
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ steps.determine_file_name.outputs.file_name }}"
 
