@@ -67,7 +67,7 @@ jobs:
             mv "$FILE_NAME" "$FINAL_NAME"
             FILE_NAME="$FINAL_NAME"
           fi
-           echo "Tên file sau khi đổi là: $FILE_NAME"
+          echo "Tên file là: "$FILE_NAME""
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
