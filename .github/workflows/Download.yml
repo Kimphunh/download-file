@@ -28,7 +28,7 @@ jobs:
         id: identify_file
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=.*$' | sed -e 's/filename=//')
+          FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n')
           if [ -z "$FILE_NAME" ]; then
             FILE_NAME=$(basename "$FILE_URL")
             if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
@@ -39,7 +39,7 @@ jobs:
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
           echo "file_name=$FILE_NAME" >> $GITHUB_ENV
 
-          MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*')
+          MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*' | tr -d '\r\n')
           EXTENSION="${MIME_TYPE##*/}"
           echo "FILE_NAME_WITH_EXT=${FILE_NAME}" >> $GITHUB_ENV
           echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
