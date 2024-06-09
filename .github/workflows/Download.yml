@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       file_url:
-        description: 'URL của file cần tải'
+        description: 'URL of the file to download'
         required: true
       file_name:
-        description: 'Tên lưu file đã tải (để trống để sử dụng tên file gốc từ URL)'
+        description: 'Save file name (leave blank to use original file name from URL)'
         required: false
         default: ''
 
@@ -33,7 +33,7 @@ jobs:
             FILE_NAME=$(basename "$FILE_URL")
             if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
               FILE_NAME="temp.file"
-              echo "Không lấy được tên file từ URL hoặc header." >> $GITHUB_ENV
+              echo "No file name found in URL or header." >> $GITHUB_ENV
             fi
           fi
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
@@ -41,7 +41,7 @@ jobs:
 
           MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*' | tr -d '\r\n')
           EXTENSION="${MIME_TYPE##*/}"
-          echo "FILE_NAME_WITH_EXT=${FILE_NAME}" >> $GITHUB_ENV
+          echo "FILE_NAME_WITH_EXT=$FILE_NAME" >> $GITHUB_ENV
           echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
 
       - name: Download file
@@ -52,6 +52,9 @@ jobs:
         run: |
           FILE_NAME="${{ github.event.inputs.file_name }}"
           FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
+          if [ -z "$FILE_NAME" ]; then
+            FILE_NAME="${{ env.FILE_NAME_WITH_EXT }}"
+          fi
           if [[ "$FILE_NAME" == *.* ]]; then
             mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
             echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_STATE
