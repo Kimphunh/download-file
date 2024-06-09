@@ -51,7 +51,7 @@ jobs:
 
       - name: Download file
         run: |
-          wget "$FILE_URL" -O "$FILE_NAME"
+          wget "${{ github.event.inputs.file_url }}" -O "$FILE_NAME"
 
       - name: Rename file if necessary
         if: ${{ github.event.inputs.file_name != '' }}
