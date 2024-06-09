@@ -33,9 +33,5 @@ jobs:
           
           # Extract the file name from the response
           FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n')
-          
-      - name: Output FILE_NAME
-        id: output_name
-        run: |
           echo "FILE_NAME=${{ env.FILE_NAME }}"
     
