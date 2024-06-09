@@ -1,4 +1,4 @@
-name: Download File and Release
+name: Test output
 
 on:
   workflow_dispatch:
