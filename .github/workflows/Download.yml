@@ -32,7 +32,7 @@ jobs:
           response=$(curl -sI "$FILE_URL")
           
           # Extract the file name from the response
-          FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n')
+          FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n' | sed -e 's/^"//' -e 's/"$//' )
           
           # Check if the file name is empty
           if [ -z "$FILE_NAME" ]; then
