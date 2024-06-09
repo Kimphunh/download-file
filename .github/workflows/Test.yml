@@ -1,21 +1,30 @@
-name: Test output
+name: Download File and Release
 
 on:
   workflow_dispatch:
     inputs:
       file_url:
-        description: 'URL of the file to download'
+        description: 'URL of the file to be downloaded'
         required: true
-        default: ''
       file_name:
-        description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
+        description: 'Custom file name (leave empty to use the original file name from the URL)'
         required: false
         default: ''
 
- jobs:
+jobs:
   download_and_release:
     runs-on: ubuntu-latest
-    - name: Identify file name and extension
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up Git
+        run: |
+          git config --global user.name 'github-actions'
+          git config --global user.email 'github-actions@github.com'
+
+      - name: Identify file name and extension
         id: identify_file
         run: |
           FILE_URL="${{ github.event.inputs.file_url }}"
