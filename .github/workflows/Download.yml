@@ -1,3 +1,4 @@
+
 name: Download File and Release
 
 on:
@@ -24,44 +25,25 @@ jobs:
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
 
-      - name: Identify file name and extension
-        id: identify_file
-        run: |
-          FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME=$(curl -sI "$FILE_URL" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n')
-          if [ -z "$FILE_NAME" ]; then
-            FILE_NAME=$(basename "$FILE_URL")
-            if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
-              FILE_NAME="temp.file"
-              echo "No file name found in URL or header." >> $GITHUB_ENV
-            fi
-          fi
-          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
-          MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*' | tr -d '\r\n')
-          EXTENSION="${MIME_TYPE##*/}"
-          echo "FILE_NAME_WITH_EXT=$FILE_NAME.$EXTENSION" >> $GITHUB_ENV
-          echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
-
-      - name: Download file
-        run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME_WITH_EXT }}"
-
+      - name: Download file and extract information
+        id: download_and_extract
+        uses: actions/download-artifact@v3
+        with:
+          url: ${{ github.event.inputs.file_url }}
+          # You can optionally specify a file name here
+          # if you want to override the default name
+          # file_name: 'my_downloaded_file.txt' 
+        
       - name: Rename file if necessary
         id: rename_file
         run: |
-          FILE_NAME="${{ github.event.inputs.file_name }}"
-          FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
-          if [ -z "$FILE_NAME" ]; then
-            FILE_NAME="${{ env.FILE_NAME }}"
-          else
-            FILE_NAME="${FILE_NAME}.${FILE_EXTENSION}"
+          desired_file_name="${{ github.event.inputs.file_name }}"
+          downloaded_file_name="${{ steps.download_and_extract.outputs.file_name }}"
+          if [ -z "$desired_file_name" ]; then
+            desired_file_name="$downloaded_file_name"
           fi
-          mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
-          echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_STATE
-
-      - name: Debug env variables
-        run: |
-          echo "FILE_NAME_WITH_EXT=${{ env.FILE_NAME_WITH_EXT }}"
-          echo "FINAL_FILE_NAME=$(cat $GITHUB_STATE | grep FINAL_FILE_NAME | cut -d '=' -f2)"
+          mv "$downloaded_file_name" "$desired_file_name"
+          echo "FINAL_FILE_NAME=$desired_file_name" >> $GITHUB_STATE
 
       - name: Determine new release version
         run: echo "release_version=v1.2.$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
@@ -94,17 +76,17 @@ jobs:
       - name: Update release notes with preview
         run: |
           ASSET_URL=$(jq --raw-output '.browser_download_url' <<< "${{ steps.upload_release_asset.outputs }}")
-          FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
+          FILE_EXTENSION="${{ steps.download_and_extract.outputs.file_extension }}"
           if [[ "$FILE_EXTENSION" =~ ^(jpg|png|gif)$ ]]; then
-            PREVIEW_TEXT="!Image Preview"
+            PREVIEW_TEXT="![Image Preview]($ASSET_URL)"
           elif [[ "$FILE_EXTENSION" =~ ^(mp3|wav)$ ]]; then
-            PREVIEW_TEXT="Listen to Audio"
+            PREVIEW_TEXT="[Listen to Audio]($ASSET_URL)"
           elif [[ "$FILE_EXTENSION" =~ ^(mp4|avi)$ ]]; then
-            PREVIEW_TEXT="Watch Video"
+            PREVIEW_TEXT="[Watch Video]($ASSET_URL)"
           else
             PREVIEW_TEXT="File URL: $ASSET_URL"
           fi
-          gh release edit "${{ env.release_version }}" --body "$PREVIEW_TEXT"
+          gh release edit "${{ env.release_version }}" --add "$PREVIEW_TEXT"
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
           
