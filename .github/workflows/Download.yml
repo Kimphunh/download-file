@@ -77,4 +77,3 @@ jobs:
           asset_path: ${{ env.file_name }}
           asset_name: ${{ env.file_name }}
           asset_content_type: application/zip 
-``
