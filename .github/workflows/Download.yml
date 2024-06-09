@@ -63,7 +63,7 @@ jobs:
         id: create_release
         uses: actions/create-release@v1
         with:
-          tag_name: v1.0.${{ github.run_number }}
+          tag_name: v1.2.${{ github.run_number }}
           release_name: Release ${{ github.run_number }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
