@@ -18,7 +18,7 @@ jobs:
 
       - name: Get latest release
         id: get_latest_release
-        uses: actions/get-latest-release@v1
+        uses: actions/get-latest-release@v1 # Using the older version
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
 
@@ -53,13 +53,17 @@ jobs:
 
       - name: Create release
         id: create_release
-        uses: actions/create-release@v3
+        uses: actions/create-release@v1.1.0 # Using the older version
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
         with:
           tag_name: ${{ env.release_version }}
           release_name: "Release ${{ env.release_version }}"
-          body: 'This is a test release.'
+          body: |
+            This release includes the following file:
+            - ${{ env.file_name }}
+            
+            Version: ${{ env.release_version }}
           draft: false
           prerelease: false
 
@@ -73,3 +77,4 @@ jobs:
           asset_path: ${{ env.file_name }}
           asset_name: ${{ env.file_name }}
           asset_content_type: application/zip 
+``
