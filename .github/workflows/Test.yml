@@ -1,4 +1,5 @@
-name: Test output
+
+name: Download File and Release
 
 on:
   workflow_dispatch:
@@ -23,7 +24,6 @@ jobs:
         run: |
           git config --global user.name 'github-actions'
           git config --global user.email 'github-actions@github.com'
-
       - name: Identify file name and extension
         id: identify_file
         run: |
@@ -32,6 +32,62 @@ jobs:
           response=$(curl -sI "$FILE_URL")
           
           # Extract the file name from the response
-          FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename="//' | tr -d '\r\n' | sed -e 's/^"//' -e 's/"$//' )
-          echo $FILE_NAME "${{ github.event.inputs.file_url }}"
-    
+          FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n' | sed -e 's/^"//' -e 's/"$//' )
+          
+          # Check if the file name is empty
+          if [ -z "$FILE_NAME" ]; then
+            # If empty, use the basename of the URL as the file name
+            FILE_NAME=$(basename "$FILE_URL")
+            # Log an error if the file name is longer than 50 characters or doesn't contain a file extension
+            if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
+              FILE_NAME="file.temp"
+              echo "Could not get the file name from the URL or header."
+            fi
+          fi
+          
+          # Set the file name and extension as environment variables
+          echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+          echo "FILE_EXTENSION=$(basename "$FILE_NAME" | rev | cut -d. -f1 | rev)" >> $GITHUB_ENV
+      - name: Download file
+        run: |
+          wget "${{ github.event.inputs.file_url }}" -O "$FILE_NAME"
+      - name: Rename file if necessary
+        run: |
+          NEW_NAME="${{ github.event.inputs.new_name }}" 
+         # Tên mới từ input của workflow
+          if [ -z "$NEW_NAME" ]; then
+            echo "Không có tên thay thế được cung cấp. Sẽ sử dụng tên file cũ."
+          elif [[ "$NEW_NAME" == *.* ]]; then
+            echo "Tên thay thế đã có phần mở rộng. Đổi tên file thành $NEW_NAME."
+            mv "$FILE_NAME" "$NEW_NAME"
+            FILE_NAME="$NEW_NAME"
+          else
+            FINAL_NAME="$NEW_NAME.${FILE_EXTENSION}"
+            echo "Tên thay thế không có phần mở rộng. Đổi tên file thành $FINAL_NAME."
+            mv "$FILE_NAME" "$FINAL_NAME"
+            FILE_NAME="$FINAL_NAME"
+          fi
+          echo "Tên file sau khi đổi là: $FILE_NAME"
+      - name: Create release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: v1.2.${{ github.run_number }}
+          release_name: Release ${{ github.run_number }}
+          body: |
+            File URL: ${{ github.event.inputs.file_url }}
+          draft: false
+          prerelease: false
+          
+      - name: Upload release asset
+        id: upload_release_asset
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ${{ github.workspace }}/${{ env.FILE_NAME }}
+          asset_name: ${{ env.FILE_NAME }}
+          asset_content_type: application/octet-stream
