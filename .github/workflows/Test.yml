@@ -67,6 +67,7 @@ jobs:
             echo "Tên thay thế không có phần mở rộng. Đổi tên file thành $FINAL_NAME."
             mv "$FILE_NAME" "$FINAL_NAME"
             FILE_NAME="$FINAL_NAME"
+            echo "FILE_NAME=$FINAL_NAME" >> $GITHUB_ENV
           fi
           echo "Tên file sau khi đổi là: $FILE_NAME"
 
