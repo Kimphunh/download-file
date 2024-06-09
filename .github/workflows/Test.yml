@@ -1,0 +1,27 @@
+name: Test output
+
+on:
+  workflow_dispatch:
+    inputs:
+      file_url:
+        description: 'URL of the file to download'
+        required: true
+        default: ''
+      file_name:
+        description: 'Name to save the downloaded file as (leave blank to use original filename from URL)'
+        required: false
+        default: ''
+
+jobs:
+  download_and_release:
+    runs-on: ubuntu-latest
+    - name: Identify file name and extension
+        id: identify_file
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          # Send a request to the URL and parse the response to get the file name
+          response=$(curl -sI "$FILE_URL")
+          
+          # Extract the file name from the response
+          FILE_NAME=$(echo "$response" | grep -o -E 'filename=.*$' | sed -e 's/filename=//' | tr -d '\r\n')
+          
