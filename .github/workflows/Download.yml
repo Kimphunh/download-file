@@ -41,7 +41,7 @@ jobs:
             # Log an error if the file name is longer than 50 characters or doesn't contain a file extension
             if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
               FILE_NAME="temp.file"
-              echo "Could not get the file name from the URL or header."
+              echo "Could not get the file name from the URL or header." >> $GITHUB_ENV
             fi
           fi
           
@@ -72,6 +72,18 @@ jobs:
             !File Preview
           draft: false
           prerelease: false
+
+      - name: Create release notes
+        id: create_release_notes
+        run: |
+          FILE_URL="${{ github.event.inputs.file_url }}"
+          FILE_NAME="${{ env.file_name }}"
+          ERROR_MSG=""
+          if [[ "$FILE_NAME" == "file.temp" ]]; then
+            ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
+          fi
+          RELEASE_NOTES="File URL: ${FILE_URL}<br>${ERROR_MSG}"
+          echo "release_notes=${RELEASE_NOTES}" >> $GITHUB_ENV
 
       - name: Upload release asset
         id: upload_release_asset
