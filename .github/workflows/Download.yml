@@ -40,8 +40,8 @@ jobs:
             FILE_NAME=$(basename "$FILE_URL")
             # Log an error if the file name is longer than 50 characters or doesn't contain a file extension
             if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
-              FILE_NAME="temp.file"
-              echo "Could not get the file name from the URL or header." >> $GITHUB_ENV
+              FILE_NAME="file.temp"
+              echo "Could not get the file name from the URL or header."
             fi
           fi
           
@@ -69,22 +69,13 @@ jobs:
           release_name: Release ${{ github.run_number }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
-            !File Preview
+            ERROR_MSG=""
+             if [[ "$FILE_NAME" == "file.temp" ]]; then
+              ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
+             fi
           draft: false
           prerelease: false
-
-      - name: Create release notes
-        id: create_release_notes
-        run: |
-          FILE_URL="${{ github.event.inputs.file_url }}"
-          FILE_NAME="${{ env.file_name }}"
-          ERROR_MSG=""
-          if [[ "$FILE_NAME" == "file.temp" ]]; then
-            ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
-          fi
-          RELEASE_NOTES="File URL: ${FILE_URL}<br>${ERROR_MSG}"
-          echo "release_notes=${RELEASE_NOTES}" >> $GITHUB_ENV
-
+          
       - name: Upload release asset
         id: upload_release_asset
         uses: actions/upload-release-asset@v1
@@ -95,19 +86,3 @@ jobs:
           asset_path: ${{ github.workspace }}/${{ env.FILE_NAME }}
           asset_name: ${{ env.FILE_NAME }}
           asset_content_type: application/octet-stream
-
-      - name: Update release notes with preview
-        run: |
-          ASSET_URL=$(jq --raw-output '.browser_download_url' <<< "${{ steps.upload_release_asset.outputs }}")
-          if [[ "$FILE_EXTENSION" =~ ^(jpg|png|gif)$ ]]; then
-            PREVIEW_TEXT="![Image Preview]($ASSET_URL)"
-          elif [[ "$FILE_EXTENSION" =~ ^(mp3|wav)$ ]]; then
-            PREVIEW_TEXT="[Listen to Audio]($ASSET_URL)"
-          elif [[ "$FILE_EXTENSION" =~ ^(mp4|avi)$ ]]; then
-            PREVIEW_TEXT="[Watch Video]($ASSET_URL)"
-          else
-            PREVIEW_TEXT="File URL: $ASSET_URL"
-          fi
-          gh release edit "${{ env.release_version }}" --add "$PREVIEW_TEXT"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
