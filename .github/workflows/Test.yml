@@ -67,7 +67,7 @@ jobs:
             mv "$FILE_NAME" "$FINAL_NAME"
             FILE_NAME="$FINAL_NAME"
           fi
-          echo your new file name is $FILE_NAME
+          echo Your file name is "$FILE_NAME"
       - name: Create release
         id: create_release
         uses: actions/create-release@v1
