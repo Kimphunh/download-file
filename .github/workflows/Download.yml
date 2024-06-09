@@ -69,10 +69,6 @@ jobs:
           release_name: Release ${{ github.run_number }}
           body: |
             File URL: ${{ github.event.inputs.file_url }}
-            ERROR_MSG=""
-             if [[ "$FILE_NAME" == "file.temp" ]]; then
-              ERROR_MSG="Lỗi: Không thể lấy tên tệp và phần mở rộng từ server."
-             fi
           draft: false
           prerelease: false
           
