@@ -60,7 +60,7 @@ jobs:
             echo "FINAL_FILE_NAME=${FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
 
       - name: Determine new release version
-        run: echo "release_version=v1.0.$(( ${{ github.run_number }} + 1 ))" >> $GITHUB_ENV
+        run: echo "release_version=v1.2.$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
 
       - name: Create release
         id: create_release
