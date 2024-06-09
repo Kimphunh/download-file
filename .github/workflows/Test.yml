@@ -7,7 +7,7 @@ on:
       file_url:
         description: 'URL of the file to be downloaded'
         required: true
-      file_name:
+      new_name:
         description: 'Custom file name (leave empty to use the original file name from the URL)'
         required: false
         default: ''
@@ -39,7 +39,7 @@ jobs:
             # If empty, use the basename of the URL as the file name
             FILE_NAME=$(basename "$FILE_URL")
             # Log an error if the file name is longer than 50 characters or doesn't contain a file extension
-            if [[ ${#FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
+            if [[ ${$FILE_NAME} -gt 50 || ! "$FILE_NAME" == *.* ]]; then
               FILE_NAME="file.temp"
               echo "Could not get the file name from the URL or header."
             fi
