@@ -17,7 +17,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Git
         run: |
@@ -48,23 +48,29 @@ jobs:
         run: wget "${{ github.event.inputs.file_url }}" -O "${{ env.FILE_NAME_WITH_EXT }}"
 
       - name: Rename file if necessary
-        if: ${{ github.event.inputs.file_name != '' }}
+        id: rename_file
         run: |
           FILE_NAME="${{ github.event.inputs.file_name }}"
           FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
           if [[ "$FILE_NAME" == *.* ]]; then
             mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
-            echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
+            echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_STATE
           else
-            mv "${{ env.FILE_NAME_WITH_EXT }}" "${FILE_NAME}.${FILE_EXTENSION}"
-            echo "FINAL_FILE_NAME=${FILE_NAME}.${FILE_EXTENSION}" >> $GITHUB_ENV
+            FINAL_FILE_NAME="${FILE_NAME}.${FILE_EXTENSION}"
+            mv "${{ env.FILE_NAME_WITH_EXT }}" "$FINAL_FILE_NAME"
+            echo "FINAL_FILE_NAME=$FINAL_FILE_NAME" >> $GITHUB_STATE
+
+      - name: Debug env variables
+        run: |
+          echo "FILE_NAME_WITH_EXT=${{ env.FILE_NAME_WITH_EXT }}"
+          echo "FINAL_FILE_NAME=$(cat $GITHUB_STATE | grep FINAL_FILE_NAME | cut -d '=' -f2)"
 
       - name: Determine new release version
         run: echo "release_version=v1.2.$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
 
       - name: Create release
         id: create_release
-        uses: actions/create-release@v1
+        uses: actions/create-release@v1.1.0
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
         with:
@@ -78,13 +84,13 @@ jobs:
 
       - name: Upload release asset
         id: upload_release_asset
-        uses: actions/upload-release-asset@v1
+        uses: actions/upload-release-asset@v2
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ${{ github.workspace }}/${{ env.FINAL_FILE_NAME }}
-          asset_name: ${{ env.FINAL_FILE_NAME }}
+          asset_path: ${{ github.workspace }}/$(cat $GITHUB_STATE | grep FINAL_FILE_NAME | cut -d '=' -f2)
+          asset_name: $(cat $GITHUB_STATE | grep FINAL_FILE_NAME | cut -d '=' -f2)
           asset_content_type: application/octet-stream
 
       - name: Update release notes with preview
