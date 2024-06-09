@@ -37,11 +37,9 @@ jobs:
             fi
           fi
           echo "FILE_NAME=$FILE_NAME" >> $GITHUB_ENV
-          echo "file_name=$FILE_NAME" >> $GITHUB_ENV
-
           MIME_TYPE=$(curl -sI "$FILE_URL" | grep -oP 'Content-Type: \K.*' | tr -d '\r\n')
           EXTENSION="${MIME_TYPE##*/}"
-          echo "FILE_NAME_WITH_EXT=$FILE_NAME" >> $GITHUB_ENV
+          echo "FILE_NAME_WITH_EXT=$FILE_NAME.$EXTENSION" >> $GITHUB_ENV
           echo "FILE_EXTENSION=$EXTENSION" >> $GITHUB_ENV
 
       - name: Download file
@@ -53,15 +51,12 @@ jobs:
           FILE_NAME="${{ github.event.inputs.file_name }}"
           FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
           if [ -z "$FILE_NAME" ]; then
-            FILE_NAME="${{ env.FILE_NAME_WITH_EXT }}"
-          fi
-          if [[ "$FILE_NAME" == *.* ]]; then
-            mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
-            echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_STATE
+            FILE_NAME="${{ env.FILE_NAME }}"
           else
-            FINAL_FILE_NAME="${FILE_NAME}.${FILE_EXTENSION}"
-            mv "${{ env.FILE_NAME_WITH_EXT }}" "$FINAL_FILE_NAME"
-            echo "FINAL_FILE_NAME=$FINAL_FILE_NAME" >> $GITHUB_STATE
+            FILE_NAME="${FILE_NAME}.${FILE_EXTENSION}"
+          fi
+          mv "${{ env.FILE_NAME_WITH_EXT }}" "$FILE_NAME"
+          echo "FINAL_FILE_NAME=$FILE_NAME" >> $GITHUB_STATE
 
       - name: Debug env variables
         run: |
@@ -101,14 +96,15 @@ jobs:
           ASSET_URL=$(jq --raw-output '.browser_download_url' <<< "${{ steps.upload_release_asset.outputs }}")
           FILE_EXTENSION="${{ env.FILE_EXTENSION }}"
           if [[ "$FILE_EXTENSION" =~ ^(jpg|png|gif)$ ]]; then
-            PREVIEW_TEXT="![Image Preview]($ASSET_URL)"
+            PREVIEW_TEXT="!Image Preview"
           elif [[ "$FILE_EXTENSION" =~ ^(mp3|wav)$ ]]; then
-            PREVIEW_TEXT="[Listen to Audio]($ASSET_URL)"
+            PREVIEW_TEXT="Listen to Audio"
           elif [[ "$FILE_EXTENSION" =~ ^(mp4|avi)$ ]]; then
-            PREVIEW_TEXT="[Watch Video]($ASSET_URL)"
+            PREVIEW_TEXT="Watch Video"
           else
             PREVIEW_TEXT="File URL: $ASSET_URL"
           fi
-          gh release edit "${{ env.release_version }}" --add "$PREVIEW_TEXT"
+          gh release edit "${{ env.release_version }}" --body "$PREVIEW_TEXT"
         env:
           GITHUB_TOKEN: ${{ secrets.ACTIONS_PAT }}
+          
