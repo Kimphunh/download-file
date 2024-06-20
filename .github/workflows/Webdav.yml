@@ -8,33 +8,80 @@ on:
         required: true
 
 jobs:
-  download_and_upload:
+  download-upload:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v2
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-    - name: Set up Python
-      uses: actions/setup-python@v2
-      with:
-        python-version: '3.x'
+      - name: Read WebDAV credentials
+        id: read-credentials
+        run: |
+          credentials=$(cat path/to/webdav_credentials.txt)
+          echo "::set-output name=credentials::$credentials"
 
-    - name: Install required packages
-      run: |
-        pip install yt-dlp
-        pip install webdavclient3
+      - name: Determine URL type
+        id: check-url
+        run: |
+          url=$INPUT_url
+          if [[ $url == *"youtube.com"* ]]; then
+            echo "type=youtube"
+          elif [[ $url == *"music.youtube.com"* ]]; then
+            echo "type=youtube_music"
+          elif [[ $url == *"/playlist?"* ]]; then
+            echo "type=playlist"
+          else
+            echo "type=normal"
+          fi
+          echo "::set-output name=url_type::$type"
 
-    - name: Read WebDAV credentials
-      id: read_credentials
-      run: |
-        credentials=$(cat webdav_credentials.txt)
-        echo "::set-output name=credentials::$credentials"
+      - name: Download content
+        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
+        run: |
+          url=$INPUT_url
+          if [[ ${{ steps.check-url.outputs.url_type }} == "youtube" ]]; then
+            # Download using yt-dlp
+            yt-dlp $url
+          elif [[ ${{ steps.check-url.outputs.url_type }} == "youtube_music" ]]; then
+            # Download music using yt-dlp
+            yt-dlp --extract-audio --audio-format mp3 $url
+          elif [[ ${{ steps.check-url.outputs.url_type }} == "playlist" ]]; then
+            # Create temporary directory for playlist
+            mkdir playlist_tmp
+            cd playlist_tmp
+            yt-dlp $url --yes-playlist
+          fi
 
-    - name: Download and process URL
-      id: download
-      run: python download_and_process.py "${{ github.event.inputs.url }}" "${{ steps.read_credentials.outputs.credentials }}"
+      - name: Upload to WebDAV
+        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
+        run: |
+          # Upload content to WebDAV
+          # Use credentials from previous step
+          credentials=${{ steps.read-credentials.outputs.credentials }}
+          # Example: dav://username:password@webdav.example.com/path/to/directory
+          dav_url="dav://$credentials/path/to/directory"
+          # Use cadaver or curl to upload files
 
-    - name: Clean up
-      if: always()
-      run: rm -rf temp_downloads/
+      - name: Clean up
+        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
+        run: |
+          # Clean up temporary files or directories
+          rm -rf playlist_tmp
+
+      - name: Download normal URL
+        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
+        run: |
+          url=$INPUT_url
+          # Download using curl or wget
+
+      - name: Upload normal URL to WebDAV
+        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
+        run: |
+          # Upload content to WebDAV
+          # Use credentials from previous step
+
+      - name: Final clean up
+        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
+        run: |
+          # Clean up any temporary files or directories
