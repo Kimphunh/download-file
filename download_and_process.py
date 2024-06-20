@@ -26,7 +26,7 @@ def main(url, webdav_credentials):
     shutil.rmtree(temp_dir)
 
 def upload_to_webdav(directory, credentials):
-    import webdav3.client as wc
+    from webdav3.client import Client
     from webdav3.exceptions import WebDavException
 
     options = {
@@ -35,7 +35,7 @@ def upload_to_webdav(directory, credentials):
         'webdav_password': credentials.splitlines()[2]
     }
 
-    client = wc.Client(options)
+    client = Client(options)
 
     for root, _, files in os.walk(directory):
         for file in files:
