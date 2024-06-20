@@ -20,8 +20,10 @@ jobs:
       with:
         python-version: '3.x'
 
-    - name: Install yt-dlp
-      run: pip install yt-dlp
+    - name: Install required packages
+      run: |
+        pip install yt-dlp
+        pip install webdavclient3
 
     - name: Read WebDAV credentials
       id: read_credentials
