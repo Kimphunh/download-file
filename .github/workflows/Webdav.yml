@@ -64,7 +64,4 @@ jobs:
 
     - name: Dọn dẹp
       run: rm -rf "$DOWNLOAD_ITEM"
-
-    - name: Dọn dẹp
-      run: rm -rf $PLAYLIST_NAME file
       
