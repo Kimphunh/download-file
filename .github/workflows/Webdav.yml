@@ -1,3 +1,4 @@
+
 name: Download and Upload
 
 on:
@@ -8,80 +9,23 @@ on:
         required: true
 
 jobs:
-  download-upload:
+  download-and-upload:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
-      - name: Read WebDAV credentials
-        id: read-credentials
-        run: |
-          credentials=$(cat webdav_credentials.txt)
-          echo "::set-output name=credentials::$credentials"
+      - name: Get WebDAV Credentials
+        uses: actions/download-artifact@v3
+        with:
+          name: webdav-credentials
+          path: webdav-credentials.txt
 
-      - name: Determine URL type
-        id: check-url
-        run: |
-          url=$INPUT_url
-          if [[ $url == *"youtube.com"* ]]; then
-            echo "type=youtube"
-          elif [[ $url == *"music.youtube.com"* ]]; then
-            echo "type=youtube_music"
-          elif [[ $url == *"/playlist?"* ]]; then
-            echo "type=playlist"
-          else
-            echo "type=normal"
-          fi
-          echo "::set-output name=url_type::$type"
+      - name: Get URL from Input
+        run: echo ${{ inputs.url }} > url.txt
 
-      - name: Download content
-        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
+      - name: Download and Upload
         run: |
-          url=$INPUT_url
-          if [[ ${{ steps.check-url.outputs.url_type }} == "youtube" ]]; then
-            # Download using yt-dlp
-            yt-dlp $url
-          elif [[ ${{ steps.check-url.outputs.url_type }} == "youtube_music" ]]; then
-            # Download music using yt-dlp
-            yt-dlp --extract-audio --audio-format mp3 $url
-          elif [[ ${{ steps.check-url.outputs.url_type }} == "playlist" ]]; then
-            # Create temporary directory for playlist
-            mkdir playlist_tmp
-            cd playlist_tmp
-            yt-dlp $url --yes-playlist
-          fi
-
-      - name: Upload to WebDAV
-        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
-        run: |
-          # Upload content to WebDAV
-          # Use credentials from previous step
-          credentials=${{ steps.read-credentials.outputs.credentials }}
-          # Example: dav://username:password@webdav.example.com/path/to/directory
-          dav_url="dav://$credentials/path/to/directory"
-          # Use cadaver or curl to upload files
-
-      - name: Clean up
-        if: ${{ steps.check-url.outputs.url_type != 'normal' }}
-        run: |
-          # Clean up temporary files or directories
-          rm -rf playlist_tmp
-
-      - name: Download normal URL
-        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
-        run: |
-          url=$INPUT_url
-          # Download using curl or wget
-
-      - name: Upload normal URL to WebDAV
-        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
-        run: |
-          # Upload content to WebDAV
-          # Use credentials from previous step
-
-      - name: Final clean up
-        if: ${{ steps.check-url.outputs.url_type == 'normal' }}
-        run: |
-          # Clean up any temporary files or directories
+          url=$(cat url.txt)
+          webdav_credentials=$(cat webdav-credentials.txt)
+          # ... (Code to process URL and download/upload)
