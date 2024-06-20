@@ -1,3 +1,3 @@
-URL=domi.teracloud.jp/
+URL=domi.teracloud.jp/dav
 USERNAME=Phatdeptraiqua
 PASSWORD=2tgkDiRh3a2LGnZq
