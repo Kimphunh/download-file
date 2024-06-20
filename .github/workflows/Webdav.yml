@@ -1,4 +1,3 @@
-
 name: Remote Upload Workflow
 
 on:
@@ -24,14 +23,21 @@ jobs:
         echo "WEBDAV_USERNAME=$WEBDAV_USERNAME" >> $GITHUB_ENV
         echo "WEBDAV_PASSWORD=$WEBDAV_PASSWORD" >> $GITHUB_ENV
 
+    - name: Cài đặt yt-dlp
+      run: |
+        curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o yt-dlp
+        chmod a+rx yt-dlp
+
     - name: Xác định loại URL và tải xuống
       run: |
         if [[ ${{ github.event.inputs.url }} == *"youtube.com"* || ${{ github.event.inputs.url }} == *"music.youtube.com"* ]]; then
-          yt-dlp --extractor-args "youtube:player_client=android" -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }}
-        elif [[ ${{ github.event.inputs.url }} == *"/playlist?"* ]]; then
-          PLAYLIST_NAME=$(yt-dlp --get-filename -o "%(playlist)s" ${{ github.event.inputs.url }})
-          mkdir $PLAYLIST_NAME
-          yt-dlp -o "$PLAYLIST_NAME/%(title)s.%(ext)s" ${{ github.event.inputs.url }}
+          if [[ ${{ github.event.inputs.url }} == *"/playlist?"* ]]; then
+            PLAYLIST_NAME=$(./yt-dlp --get-filename -o "%(playlist)s" ${{ github.event.inputs.url }})
+            mkdir $PLAYLIST_NAME
+            ./yt-dlp -o "$PLAYLIST_NAME/%(title)s.%(ext)s" ${{ github.event.inputs.url }}
+          else
+            ./yt-dlp --extractor-args "youtube:player_client=android" -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }}
+          fi
         else
           curl -o file ${{ github.event.inputs.url }}
         fi
@@ -40,6 +46,8 @@ jobs:
       run: |
         if [ -d "$PLAYLIST_NAME" ]; then
           curl -T $PLAYLIST_NAME -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL/$PLAYLIST_NAME -o /dev/null
+        elif [ -f "file" ]; then
+          curl -T file -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL -o /dev/null
         else
           curl -T * -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL -o /dev/null
         fi
