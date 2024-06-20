@@ -29,6 +29,7 @@ jobs:
         chmod a+rx yt-dlp
 
     - name: Xác định loại URL và tải xuống
+      id: download
       run: |
         if [[ ${{ github.event.inputs.url }} == *"music.youtube.com"* ]]; then
           FORMAT="bestaudio"
@@ -40,19 +41,29 @@ jobs:
           PLAYLIST_NAME=$(./yt-dlp --get-filename -o "%(playlist)s" ${{ github.event.inputs.url }})
           mkdir $PLAYLIST_NAME
           ./yt-dlp -f $FORMAT -o "$PLAYLIST_NAME/%(title)s.%(ext)s" ${{ github.event.inputs.url }}
+          echo "::set-output name=downloaded_item::$PLAYLIST_NAME"
         else
-          ./yt-dlp -f $FORMAT --extractor-args "youtube:player_client=android" -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }}
+          FILE_NAME=$(./yt-dlp --get-filename -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }})
+          ./yt-dlp -f $FORMAT --extractor-args "youtube:player_client=android" -o "$FILE_NAME" ${{ github.event.inputs.url }}
+          echo "::set-output name=downloaded_item::$FILE_NAME"
         fi
 
     - name: Upload lên WebDAV
       run: |
-        if [ -d "$PLAYLIST_NAME" ]; then
-          curl -T $PLAYLIST_NAME -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL/$PLAYLIST_NAME -o /dev/null
-        elif [ -f "file" ]; then
-          curl -T file -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL -o /dev/null
+        DOWNLOAD_ITEM=${{ steps.download.outputs.downloaded_item }}
+        WEBDAV_PATH=$WEBDAV_URL
+        if [ -d "$DOWNLOAD_ITEM" ]; then
+          for FILE in "$DOWNLOAD_ITEM"/*; do
+            curl -T "$FILE" -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD "$WEBDAV_PATH/$DOWNLOAD_ITEM/"
+          done
+        elif [ -f "$DOWNLOAD_ITEM" ]; then
+          curl -T "$DOWNLOAD_ITEM" -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD "$WEBDAV_PATH/"
         else
-          curl -T * -u $WEBDAV_USERNAME:$WEBDAV_PASSWORD $WEBDAV_URL -o /dev/null
+          echo "Không có tệp hoặc thư mục nào để tải lên"
         fi
+
+    - name: Dọn dẹp
+      run: rm -rf "$DOWNLOAD_ITEM"
 
     - name: Dọn dẹp
       run: rm -rf $PLAYLIST_NAME file
