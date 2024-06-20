@@ -1,0 +1,3 @@
+URL=domi.teracloud.jp/
+USERNAME=Phatdeptraiqua
+PASSWORD=2tgkDiRh3a2LGnZq
