@@ -1,0 +1,38 @@
+name: Download and Upload
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'URL to download'
+        required: true
+
+jobs:
+  download_and_upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Python
+      uses: actions/setup-python@v2
+      with:
+        python-version: '3.x'
+
+    - name: Install yt-dlp
+      run: pip install yt-dlp
+
+    - name: Read WebDAV credentials
+      id: read_credentials
+      run: |
+        credentials=$(cat webdav_credentials.txt)
+        echo "::set-output name=credentials::$credentials"
+
+    - name: Download and process URL
+      id: download
+      run: python download_and_process.py "${{ github.event.inputs.url }}" "${{ steps.read_credentials.outputs.credentials }}"
+
+    - name: Clean up
+      if: always()
+      run: rm -rf temp_downloads/
