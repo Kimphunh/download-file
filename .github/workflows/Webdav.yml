@@ -30,16 +30,18 @@ jobs:
 
     - name: Xác định loại URL và tải xuống
       run: |
-        if [[ ${{ github.event.inputs.url }} == *"youtube.com"* || ${{ github.event.inputs.url }} == *"music.youtube.com"* ]]; then
-          if [[ ${{ github.event.inputs.url }} == *"/playlist?"* ]]; then
-            PLAYLIST_NAME=$(./yt-dlp --get-filename -o "%(playlist)s" ${{ github.event.inputs.url }})
-            mkdir $PLAYLIST_NAME
-            ./yt-dlp -o "$PLAYLIST_NAME/%(title)s.%(ext)s" ${{ github.event.inputs.url }}
-          else
-            ./yt-dlp --extractor-args "youtube:player_client=android" -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }}
-          fi
+        if [[ ${{ github.event.inputs.url }} == *"music.youtube.com"* ]]; then
+          FORMAT="bestaudio"
+        elif [[ ${{ github.event.inputs.url }} == *"youtube.com"* ]]; then
+          FORMAT="bestvideo+bestaudio"
+        fi
+
+        if [[ ${{ github.event.inputs.url }} == *"/playlist?"* ]]; then
+          PLAYLIST_NAME=$(./yt-dlp --get-filename -o "%(playlist)s" ${{ github.event.inputs.url }})
+          mkdir $PLAYLIST_NAME
+          ./yt-dlp -f $FORMAT -o "$PLAYLIST_NAME/%(title)s.%(ext)s" ${{ github.event.inputs.url }}
         else
-          curl -o file ${{ github.event.inputs.url }}
+          ./yt-dlp -f $FORMAT --extractor-args "youtube:player_client=android" -o "%(title)s.%(ext)s" ${{ github.event.inputs.url }}
         fi
 
     - name: Upload lên WebDAV
