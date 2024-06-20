@@ -18,7 +18,7 @@ jobs:
       - name: Read WebDAV credentials
         id: read-credentials
         run: |
-          credentials=$(cat path/to/webdav_credentials.txt)
+          credentials=$(cat webdav_credentials.txt)
           echo "::set-output name=credentials::$credentials"
 
       - name: Determine URL type
